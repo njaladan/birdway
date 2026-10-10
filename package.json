@@ -1,0 +1,12 @@
+{
+  "name": "birdway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A peaceful browser pigeon game over real Manhattan geography",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "check": "node tools/check.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
