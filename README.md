@@ -18,7 +18,7 @@ The entire repository is a static website. To host it, serve this directory with
 
 - Actual Manhattan building footprints and roof heights below an approximate line along 59th Street: **20,868 buildings** and **1,152 real street centerlines**, bundled locally in about 1.5 MB of map data.
 - Smooth acceleration, banking, climb/descent, faster gliding, trailing camera, automatic ledge takeoff, forgiving facade collisions, rooftop and street landing, and ground waddling. No damage, hunger, lives or timed goals.
-- Day/night cycle (24-minute day), adjustable time, golden skies, calm water, stars and illuminated windows.
+- Day/night cycle (24-minute day), adjustable time and 1–60 minute cycle length, time presets, golden skies, calm water, stars and illuminated windows.
 - A rooftop nest. Carry food home, peck a snack, bring shiny finds back, decorate the nest, and welcome up to five flock companions. Every two delivered bites invites a friend.
 - **17 neighborhood discoveries:** bagel/pretzel carts, picnic/bakery/café crumbs, shiny keepsakes, fountain bathing, steam updrafts, cooing with a busker and a neighbor, rooftop flowers and laundry perches.
 - **12 landmark postcards**, a field guide with destinations, local minimap, city map, and a direction/distance hint when you choose an outing.
@@ -35,6 +35,9 @@ The entire repository is a static website. To host it, serve this directory with
 | A / D or left / right | Bank and turn | Turn |
 | Space | Flap and rise | Take off |
 | Shift | Faster glide | — |
+| F | Short dash burst | Take off with a dash |
+| Ctrl / hold S | Almost vertical / progressive dive | — |
+| T / [ / ] | Time presets / previous / next hour | Same |
 | E | Toggle landing approach | Interact / pick up / deliver |
 | P | — | Peck food, or eat a carried bite |
 | Q | Coo | Coo |
