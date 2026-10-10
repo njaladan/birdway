@@ -5,7 +5,10 @@ export function makeSky(scene) {
  const sky=new THREE.Mesh(new THREE.SphereGeometry(14000,32,16),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,uniforms,vertexShader:`varying vec3 direction; void main(){direction=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`varying vec3 direction; uniform vec3 sun,top,horizon,sunColor;uniform float night;void main(){vec3 d=normalize(direction);float h=max(d.y,0.);vec3 c=mix(horizon,top,pow(h,.55));float a=max(dot(d,normalize(sun)),0.);c+=sunColor*(pow(a,180.)*.55+pow(a,22.)*.20);c=mix(c,vec3(1.,.92,.70),smoothstep(.9994,.9998,a)*smoothstep(-.02,.03,sun.y));gl_FragColor=vec4(c,1.);
 #include <tonemapping_fragment>
 #include <colorspace_fragment>
-}` }));scene.add(sky);
+}` }));
+ // Ground layers avoid depth writes to prevent coplanar flicker. Paint the sky
+ // first, or its distant sphere erases water, roads and parks afterward.
+ sky.renderOrder=-120;sky.material.depthTest=false;scene.add(sky);
  const sunLight=new THREE.DirectionalLight(0xffe2b8,2.3);scene.add(sunLight);scene.add(sunLight.target);
  sunLight.castShadow=true;sunLight.shadow.mapSize.set(1024,1024);sunLight.shadow.camera.left=sunLight.shadow.camera.bottom=-160;sunLight.shadow.camera.right=sunLight.shadow.camera.top=160;sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=1800;sunLight.shadow.normalBias=.45;sunLight.shadow.bias=-.00015;
  const hemi=new THREE.HemisphereLight(0xe3f1ed,0x75796b,1.25);scene.add(hemi);
