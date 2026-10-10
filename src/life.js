@@ -23,7 +23,7 @@ export class CityLife {
   this.scene=scene;this.map=map;this.flight=flight;this.nest=nest;this.audio=audio;this.toast=toast;this.save=loadSave();this.time=0;this.nearby=null;this.target=null;this.cooldowns=new Map();this.flock=[];this.markerRoot=new THREE.Group();scene.add(this.markerRoot);this.decoration=new THREE.Group();this.decoration.position.copy(nest);scene.add(this.decoration);
   this.landmarks=LANDMARKS.map(l=>({...l,position:geo(l.lon,l.lat)}));
   this.moments=MOMENTS.map(m=>{let p=geo(m.lon,m.lat);if(m.roof)p.y=map.surface(p.x,p.z);else p=this.freeGround(p);return {...m,position:p};});
-  this.parks=buildParkWorld(scene,parkData);this.buildLandmarkStructures();this.buildBridge();this.buildStreetLife();
+  this.parks=buildParkWorld(scene,parkData,map);this.buildLandmarkStructures();this.buildBridge();this.buildStreetLife();
   for(const m of this.moments){m.group=new THREE.Group();m.group.position.copy(m.position);scene.add(m.group);this.buildProp(m);}
   const glintMat=new THREE.MeshBasicMaterial({color:0xe6c885});
   for(const m of this.moments){const glint=new THREE.Mesh(new THREE.OctahedronGeometry(.32),glintMat);glint.position.copy(m.position).y+=3;this.markerRoot.add(glint);m.marker=glint;}
@@ -94,7 +94,7 @@ export class CityLife {
    else target.y=Math.max(target.y,this.map.surface(target.x,target.z)+1.7);
    if(b.position.lengthSq()<1)b.position.copy(target);else b.position.lerp(target,1-Math.exp(-dt*2));b.rotation.set(this.flight.pitch,this.flight.heading,this.flight.bank*.8,'YXZ');b.userData.animate(this.time+i*.3,this.flight.flying,this.flight.speed);
   });
-  this.updateStreet(dt);this.parks.update(p);
+  this.updateStreet(dt);this.parks.update(p,this.time);
   if(this.target){const d=Math.hypot(p.x-this.target.position.x,p.z-this.target.position.z);if(d<15)this.target=null;}
   if(Math.floor(this.time/12)!==this.saveTick){this.saveTick=Math.floor(this.time/12);this.persist();}
  }
