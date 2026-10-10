@@ -2,7 +2,9 @@ import * as THREE from '../vendor/three.module.js';
 import {geo} from './geography.js';
 import {box,mesh,rand} from './city.js';
 import {makeBird} from './bird.js';
+import {BIRD_CLEARANCE} from './flight.js';
 import {LANDMARKS,MOMENTS,INTENTIONS} from './content.js';
+import {buildParkWorld} from './parks.js';
 const KEY='birdway-save-v1';
 export function loadSave(){
  const empty={food:0,treasures:[],visited:[],moments:[],carried:null,flowers:0,distance:0,photos:[],hours:17.55};
@@ -17,15 +19,16 @@ export function loadSave(){
  }catch{}return empty;
 }
 export class CityLife {
- constructor(scene,map,flight,nest,audio,toast){
+ constructor(scene,map,flight,nest,audio,toast,parkData){
   this.scene=scene;this.map=map;this.flight=flight;this.nest=nest;this.audio=audio;this.toast=toast;this.save=loadSave();this.time=0;this.nearby=null;this.target=null;this.cooldowns=new Map();this.flock=[];this.markerRoot=new THREE.Group();scene.add(this.markerRoot);this.decoration=new THREE.Group();this.decoration.position.copy(nest);scene.add(this.decoration);
   this.landmarks=LANDMARKS.map(l=>({...l,position:geo(l.lon,l.lat)}));
   this.moments=MOMENTS.map(m=>{let p=geo(m.lon,m.lat);if(m.roof)p.y=map.surface(p.x,p.z);else p=this.freeGround(p);return {...m,position:p};});
-  this.buildParks();this.buildBridge();this.buildStreetLife();
+  this.parks=buildParkWorld(scene,parkData);this.buildLandmarkStructures();this.buildBridge();this.buildStreetLife();
   for(const m of this.moments){m.group=new THREE.Group();m.group.position.copy(m.position);scene.add(m.group);this.buildProp(m);}
   const glintMat=new THREE.MeshBasicMaterial({color:0xe6c885});
   for(const m of this.moments){const glint=new THREE.Mesh(new THREE.OctahedronGeometry(.32),glintMat);glint.position.copy(m.position).y+=3;this.markerRoot.add(glint);m.marker=glint;}
-  this.carriedMesh=mesh(flight.bird,new THREE.SphereGeometry(.12,10,8),0xe6c69a,0,.68,-1.08);
+  const beak=flight.bird.getObjectByName('face-bone')||flight.bird;
+  this.carriedMesh=mesh(beak,new THREE.SphereGeometry(.018,10,8),0xe6c69a,0,.057,0);this.carriedMesh.visible=!!this.save.carried;
   this.rebuildHome();
  }
  freeGround(p){if(!this.map.buildingAt(p.x,p.z)&&this.map.onLand(p.x,p.z))return p;
@@ -60,12 +63,12 @@ export class CityLife {
  peck(){if(this.flight.flying)return;this.flight.peck=1;if(this.save.carried?.type==='food'){this.toast(`A little ${this.save.carried.item}. Delicious.`);this.save.carried=null;this.persist();}else if(this.nearby?.type==='food'&&(this.cooldowns.get(this.nearby.id)||0)<=this.time){this.cooldowns.set(this.nearby.id,this.time+30);this.record(this.nearby.id);this.toast('Just a peck. There’s enough city to share.');}else this.audio.coo();}
  coo(){this.audio.coo();this.flight.peck=.35;this.toast(this.friends?'Your little flock answers.':'A quiet coo disappears between the buildings.');}
  rebuildHome(){
-  while(this.flock.length<this.friends){const b=makeBird(1.15);this.scene.add(b);this.flock.push(b);}
+  while(this.flock.length<this.friends){const b=makeBird(.97);this.scene.add(b);this.flock.push(b);}
   while(this.flock.length>this.friends){this.scene.remove(this.flock.pop());}
   for(const child of [...this.decoration.children]){child.geometry?.dispose();child.material?.dispose();this.decoration.remove(child);}
   const items=this.save.treasures;
-  items.forEach((id,i)=>{const a=i*2.3,x=Math.cos(a)*1.1,z=Math.sin(a)*1.1;const m=id==='ring'?mesh(this.decoration,new THREE.TorusGeometry(.23,.055,8,20),0xe5bf64,x,-.35,z):mesh(this.decoration,new THREE.SphereGeometry(.23,12,8),id==='button'?0x78adb1:id==='glass'?0x87ba96:0xd78a94,x,-.35,z);m.scale.y=.4;m.rotation.x=.2;});
-  for(let i=0;i<Math.min(this.save.food,10);i++)mesh(this.decoration,new THREE.SphereGeometry(.12,8,6),0xdbbc7f,Math.cos(i)*.65,-.33,Math.sin(i)*.65);
+  items.forEach((id,i)=>{const a=i*2.3,x=Math.cos(a)*.21,z=Math.sin(a)*.21;const m=id==='ring'?mesh(this.decoration,new THREE.TorusGeometry(.01,.0025,8,20),0xe5bf64,x,-.14,z):mesh(this.decoration,new THREE.SphereGeometry(.015,12,8),id==='button'?0x78adb1:id==='glass'?0x87ba96:0xd78a94,x,-.14,z);m.scale.y=.4;m.rotation.x=.2;});
+  for(let i=0;i<Math.min(this.save.food,10);i++)mesh(this.decoration,new THREE.SphereGeometry(.009,8,6),0xdbbc7f,Math.cos(i)*.13,-.14,Math.sin(i)*.13);
  }
  update(dt){
   this.time+=dt;const p=this.flight.position;this.nearby=null;let closest=Infinity;
@@ -85,13 +88,13 @@ export class CityLife {
   }
   this.carriedMesh.visible=!!this.save.carried;if(this.save.carried)this.carriedMesh.material.color.set(this.save.carried.type==='shiny'?0xdabc68:0xdabb8e);
   this.flock.forEach((b,i)=>{
-   const angle=this.flight.heading+(i%2?-.55:.55),radius=6+Math.floor(i/2)*4;
+   const angle=this.flight.heading+(i%2?-.55:.55),radius=this.flight.flying?3+Math.floor(i/2)*2:.45+Math.floor(i/2)*.25;
    const target=p.clone().add(new THREE.Vector3(Math.sin(angle)*radius,this.flight.flying?Math.sin(this.time+i)*.7:-.1,Math.cos(angle)*radius));
-   if(!this.flight.flying){target.y=this.map.surface(target.x,target.z)+.7;if(target.y>p.y+3||target.y<p.y-3)target.copy(this.nest).add(new THREE.Vector3(Math.cos(i)*2,.2,Math.sin(i)*2));}
+   if(!this.flight.flying){target.y=this.map.surface(target.x,target.z)+BIRD_CLEARANCE;if(target.y>p.y+3||target.y<p.y-3)target.copy(this.nest).add(new THREE.Vector3(Math.cos(i)*.45,0,Math.sin(i)*.45));}
    else target.y=Math.max(target.y,this.map.surface(target.x,target.z)+1.7);
    if(b.position.lengthSq()<1)b.position.copy(target);else b.position.lerp(target,1-Math.exp(-dt*2));b.rotation.set(this.flight.pitch,this.flight.heading,this.flight.bank*.8,'YXZ');b.userData.animate(this.time+i*.3,this.flight.flying,this.flight.speed);
   });
-  this.updateStreet(dt);
+  this.updateStreet(dt);this.parks.update(p);
   if(this.target){const d=Math.hypot(p.x-this.target.position.x,p.z-this.target.position.z);if(d<15)this.target=null;}
   if(Math.floor(this.time/12)!==this.saveTick){this.saveTick=Math.floor(this.time/12);this.persist();}
  }
@@ -112,7 +115,7 @@ export class CityLife {
   if(m.prop==='busker'){
    mesh(g,new THREE.CapsuleGeometry(.23,.6,4,8),0xb38868,0,1.1,0);mesh(g,new THREE.SphereGeometry(.21,12,8),0xd9b99a,0,1.8,0);const guitar=mesh(g,new THREE.SphereGeometry(.3,12,8),0x997247,.28,1.0,-.3);guitar.scale.set(1,1.2,.3);box(g,0x806442,.5,1.35,-.3,.1,.75,.07).rotation.z=-.4;
   }
-  if(m.prop==='friend'){m.npc=makeBird(.9);m.npc.position.set(2,.6,0);g.add(m.npc);}
+  if(m.prop==='friend'){m.npc=makeBird(.97);m.npc.position.set(2,.16,0);g.add(m.npc);}
   if(m.prop==='planter'||m.prop==='garden'){
    const n=m.prop==='garden'?4:1;for(let i=0;i<n;i++){const x=(i-(n-1)/2)*1.6;box(g,0x9b9a7a,x,.35,.8,1.2,.7,1.2);mesh(g,new THREE.SphereGeometry(.55,12,8),0x789468,x,.9,.8).scale.y=.7;}
    if(m.prop==='garden')for(let i=0;i<Math.min(18,this.save.flowers);i++)this.addFlower(m);
@@ -135,14 +138,7 @@ export class CityLife {
    m.itemMesh=m.type==='shiny'&&m.id==='ring'?mesh(g,new THREE.TorusGeometry(.25,.06,8,16),0xdfbc61,2,.18,1):mesh(g,new THREE.SphereGeometry(m.type==='food'?.22:.18,12,8),m.type==='food'?0xd8ba80:m.id==='button'?0x6eafb8:0x9acaaa,2,.18,1);m.itemMesh.scale.y=.45;
   }
  }
- buildParks(){
-  const parks=[[-74.0162,40.7036,65],[-74.0175,40.7048,50],[-74.0060,40.7129,48],[-73.9973,40.7308,65],[-73.9832,40.7536,49],[-73.9876,40.7413,50],[-74.0176,40.7170,40]];
-  const spots=[];for(const [lon,lat,radius] of parks){const p=geo(lon,lat);const ground=mesh(this.scene,new THREE.CircleGeometry(radius,40),0x93a77d,p.x,-.05,p.z);ground.rotation.x=-Math.PI/2;ground.material.depthTest=false;ground.material.depthWrite=false;ground.renderOrder=-60;
-   for(let i=0;i<32;i++){const a=rand(i+radius)*Math.PI*2,r=Math.sqrt(rand(i+500+radius))*radius,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(this.map.onLand(x,z)&&!this.map.buildingAt(x,z))spots.push([x,z,5+rand(i)*4]);}
-  }
-  const trunk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.2,.3,1,7),new THREE.MeshStandardMaterial({color:0x84785d}),spots.length);
-  const crown=new THREE.InstancedMesh(new THREE.SphereGeometry(1,12,8),new THREE.MeshStandardMaterial({color:0x7c9b70,roughness:1}),spots.length*3);const d=new THREE.Object3D();
-  spots.forEach(([x,z,h],i)=>{d.position.set(x,h/2,z);d.scale.set(1,h,1);d.updateMatrix();trunk.setMatrixAt(i,d.matrix);for(let j=0;j<3;j++){d.position.set(x+Math.sin(j*2.1)*1.3,h-1+j*.6,z+Math.cos(j*2.1)*1.3);d.scale.set(h*.32,h*.28,h*.32);d.updateMatrix();crown.setMatrixAt(i*3+j,d.matrix);crown.setColorAt(i*3+j,new THREE.Color().setHSL(.23+rand(i)*.045,.18+rand(i+40)*.08,.34+rand(i+30)*.11));}});this.scene.add(trunk,crown);
+ buildLandmarkStructures(){
   // A garden walkway along the High Line, with a supporting surface for little feet.
   const ha=geo(-74.0077,40.7363),hb=geo(-74.0017,40.7440),hd=hb.clone().sub(ha),hl=hd.length(),hy=Math.atan2(hd.x,hd.z),nx=Math.cos(hy)*3.5,nz=-Math.sin(hy)*3.5;
   const high=new THREE.Group();high.position.copy(ha);high.rotation.y=hy;this.scene.add(high);box(high,0x9b9f87,0,9,hl/2,7,1,hl);for(const x of [-2.8,2.8])box(high,0x859775,x,9.7,hl/2,.8,.5,hl);

@@ -6,7 +6,9 @@ export function makeSky(scene) {
 #include <tonemapping_fragment>
 #include <colorspace_fragment>
 }` }));scene.add(sky);
- const sunLight=new THREE.DirectionalLight(0xffe2b8,2.3);scene.add(sunLight);const hemi=new THREE.HemisphereLight(0xe3f1ed,0x75796b,2.2);scene.add(hemi);
+ const sunLight=new THREE.DirectionalLight(0xffe2b8,2.3);scene.add(sunLight);scene.add(sunLight.target);
+ sunLight.castShadow=true;sunLight.shadow.mapSize.set(1024,1024);sunLight.shadow.camera.left=sunLight.shadow.camera.bottom=-160;sunLight.shadow.camera.right=sunLight.shadow.camera.top=160;sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=1800;sunLight.shadow.normalBias=.45;sunLight.shadow.bias=-.00015;
+ const hemi=new THREE.HemisphereLight(0xe3f1ed,0x75796b,1.25);scene.add(hemi);
  const waterUniforms={time:{value:0},night:{value:0},gold:{value:0},sky:{value:new THREE.Color(0xa0c5bd)}};
  const water=new THREE.Mesh(new THREE.PlaneGeometry(35000,35000),new THREE.ShaderMaterial({uniforms:waterUniforms,vertexShader:`varying vec3 world;void main(){world=(modelMatrix*vec4(position,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,fragmentShader:`varying vec3 world;uniform float time,night,gold;uniform vec3 sky;void main(){float wave=sin(world.x*.035+time*.3)*sin(world.z*.025-time*.2);float small=sin(world.x*.13+world.z*.11+time*.4);vec3 c=mix(vec3(.28,.46,.48),vec3(.055,.11,.18),night);c+=sky*(wave*.025+small*.012);float stripe=pow(max(0.,sin(world.x*.0008+world.z*.0011)),12.)*(.5+.5*wave);c+=vec3(.61,.32,.12)*stripe*gold*.48;gl_FragColor=vec4(c,1.);
 #include <tonemapping_fragment>
@@ -21,7 +23,9 @@ export function makeSky(scene) {
  function update(hours,elapsed,position) {
   const angle=(hours-6)/24*Math.PI*2,alt=Math.sin(angle),night=1-THREE.MathUtils.smoothstep(alt,-.15,.2),dusk=1-THREE.MathUtils.smoothstep(Math.abs(alt),.05,.48);
   uniforms.sun.value.set(Math.cos(angle),alt,-.35);uniforms.top.value.copy(topDay).lerp(topDusk,dusk*.6).lerp(topNight,night);uniforms.horizon.value.copy(dayHorizon).lerp(duskHorizon,dusk).lerp(nightHorizon,night);uniforms.sunColor.value.set(0xffd1a0).multiplyScalar(1-night);uniforms.night.value=night;
-  sunLight.position.copy(uniforms.sun.value).multiplyScalar(5000);sunLight.intensity=Math.max(.05,alt)*2.5;sunLight.color.set(dusk>.4?0xffbe83:0xffe9cc);hemi.intensity=2.0-night*1.35;hemi.color.copy(uniforms.horizon.value);
+  sunLight.target.position.copy(position);sunLight.position.copy(uniforms.sun.value).normalize().multiplyScalar(800).add(position);sunLight.intensity=(.45+Math.max(0,alt)*2.7)*(1-night);sunLight.color.set(dusk>.4?0xffd2a6:0xffefd9);
+  // Cool skylight keeps brick, glass and stone distinct while the sun turns warm.
+  hemi.intensity=1.25-night*.65;hemi.color.set(0xddeaf3).lerp(new THREE.Color(0x657a9f),night);hemi.groundColor.set(0x74776e).lerp(new THREE.Color(0x323c4c),night);
   scene.fog.color.copy(uniforms.horizon.value);waterUniforms.time.value=elapsed;waterUniforms.night.value=night;waterUniforms.gold.value=dusk*(1-night);waterUniforms.sky.value.copy(uniforms.horizon.value);starMat.opacity=night*.7;clouds.material.opacity=.35*(1-night*.7);clouds.material.color.copy(uniforms.horizon.value).lerp(new THREE.Color(0xffffff),.35);
   sky.position.copy(position);stars.position.copy(position);clouds.position.x=elapsed*1.2;
   return {night,dusk};

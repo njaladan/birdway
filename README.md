@@ -16,8 +16,10 @@ The entire repository is a static website. To host it, serve this directory with
 
 ## What works
 
-- Actual Manhattan building footprints and roof heights below an approximate line along 59th Street: **20,868 buildings** and **1,152 real street centerlines**, bundled locally in about 1.5 MB of map data.
-- Smooth acceleration, banking, climb/descent, faster gliding, trailing camera, automatic ledge takeoff, forgiving facade collisions, rooftop and street landing, and ground waddling. No damage, hunger, lives or timed goals.
+- Actual Manhattan building footprints, roof heights, and surveyed roof meshes below an approximate line along 59th Street: **20,868 footprint records**, including **19,666 matched LOD2 roof models** from the 2014 NYC 3D Building Model. The bundled city data also includes **1,152 street centerlines** and OpenStreetMap parks, paths, and tree locations.
+- OpenStreetMap geometry for **7,099 park and plaza polygons**, **22,054 paths**, and **13,504 mapped tree points**. Up to 4,000 trees are instanced for rendering.
+- A CC0 rigged pigeon, about 35 cm long with a roughly 65 cm wingspan, with animated flight, folded-wing idle, walking and pecking.
+- Smooth acceleration, banking, climb/descent, faster gliding, trailing camera with a downward view during dives, automatic ledge takeoff, forgiving facade collisions, rooftop and street landing, and ground waddling. No damage, hunger, lives or timed goals.
 - Day/night cycle (24-minute day), adjustable time and 1–60 minute cycle length, time presets, golden skies, calm water, stars and illuminated windows.
 - A rooftop nest. Carry food home, peck a snack, bring shiny finds back, decorate the nest, and welcome up to five flock companions. Every two delivered bites invites a friend.
 - **17 neighborhood discoveries:** bagel/pretzel carts, picnic/bakery/café crumbs, shiny keepsakes, fountain bathing, steam updrafts, cooing with a busker and a neighbor, rooftop flowers and laundry perches.
@@ -54,21 +56,23 @@ For a landing, press E, steer above the chosen surface, and let your pigeon sett
 
 ## Performance
 
-Balanced caps pixel ratio at 1.5; Light at 1; High at 2. Use Settings → Light on a large Retina display if needed. Buildings are batched into spatial chunks with frustum culling. Roof equipment and trees are instanced; static bird feathers are merged within animated joints; distant small props and traffic are hidden. No realtime shadows, postprocessing, streaming imagery or physics engine.
+Balanced caps pixel ratio at 1.5 and uses local 1024-pixel shadows; Light uses pixel ratio 1 and disables shadows; High uses pixel ratio 2 and shadows. Use Settings → Light on a large Retina display if needed. Building, park, and path geometry is batched by spatial chunk. Roof equipment and trees are instanced; each rigged pigeon uses one skinned draw call; distant small props and traffic are hidden. There is no postprocessing, streaming imagery or physics engine.
+
+Near roofs, the flight model targets 35 m/s cruise and 55 m/s glide; between 30 and 100 m above the local roof, it smoothly increases toward 100 m/s cruise and 135 m/s glide. A dash targets 90 m/s near roofs or 200 m/s aloft for 1.2 seconds, with a two-second cooldown. Ground walking targets 1.2 m/s. These are game movement values, not a measured biological simulation.
 
 The implementation targets an M1 MacBook Pro, but no M1 hardware benchmark has been run. Software-rendered Chromium validates rendering and interactions here; it cannot establish Mac frame rate. Try Light first if Balanced feels heavy. Flight tuning lives in the small `FLIGHT` object in `src/flight.js`.
 
 ## Limits / simplified parts
 
-This is a geographically grounded, stylized game, not photogrammetry. Footprints are accurate to the source snapshot and approximately one-metre quantization. Generic procedural façades and flat roofs do not capture all building setbacks, textures or current construction. Missing source heights fall back to 4m. One WTC has a modeled taper and mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. Road widths, parks, traffic, people and street props are stylized. Distant neighboring boroughs have land silhouettes, without full building coverage.
+This is a geographically grounded, stylized game, not photogrammetry. Footprints reflect their source snapshot and are quantized to about one metre. The 2014 roof survey is matched to the newer footprints by location and dimensions; unmatched or newer construction uses its footprint and fallback roof height. PLUTO 2017 year-built and building-class fields guide eight procedural façade families. Those façades are approximations, not scans, and do not reproduce every setback, material or current construction. One WTC has a modeled taper and mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. OSM park boundaries, paths, and tree positions are real mapped features, while their rendering, road widths, traffic, people and street props are stylized. Distant neighboring boroughs have land silhouettes, without full building coverage.
 
 Tiny moments are deliberately lightweight: bathing splashes, gardening adds flowers, music answers your coo, and resting gives a quiet pause. Human characters and vehicles follow simple short paths, with no social or traffic simulation. Companion birds follow you; they do not have independent schedules. No interiors, dialogue trees, multiplayer or cloud save.
 
-See [CREDITS.md](CREDITS.md) for map sources, provenance and accuracy. `tools/prepare-map.py` regenerates the geographic subset from its three source inputs.
+See [CREDITS.md](CREDITS.md) for map sources, provenance and accuracy. `tools/prepare-map.py` regenerates the footprints, land and streets from its three source inputs; `tools/prepare-detail.py` matches the LOD2 roof survey and PLUTO metadata; `tools/prepare-parks.py` extracts the OpenStreetMap subset. The bundled city data is about 19 MB.
 
 ## Code layout and checks
 
-`src/main.js` connects the small modules: `flight.js`, `bird.js`, `geography.js`, `city.js`, `sky.js`, `life.js`, `content.js`, `interface.js`, and `audio.js`. `vendor/` contains Three.js; `data/` contains bundled geography. Plain JavaScript and CSS; no framework.
+`src/main.js` connects the small modules: `flight.js`, `bird.js`, `geography.js`, `city.js`, `facades.js`, `parks.js`, `sky.js`, `life.js`, `content.js`, `interface.js`, and `audio.js`. `vendor/` contains Three.js; `data/` contains bundled geography and derived map data. Plain JavaScript and CSS; no framework.
 
 ```sh
 npm run check

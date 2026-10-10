@@ -1,5 +1,6 @@
 import * as THREE from '../vendor/three.module.js';
 import {geo} from './geography.js';
+import {createFacadeMaterial,facadeStyle} from './facades.js';
 export const rand=(n)=>{const r=Math.sin(n*127.1+311.7)*43758.5453;return r-Math.floor(r);};
 export function mesh(parent,geometry,color,x=0,y=0,z=0) {const m=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.8}));m.position.set(x,y,z);parent.add(m);return m;}
 export function box(parent,color,x,y,z,w,h,d) {return mesh(parent,new THREE.BoxGeometry(w,h,d),color,x,y,z);}
@@ -24,30 +25,30 @@ export async function buildCity(scene,map,progress) {
  for(const [a,color,order] of [[curbPositions,0xc9c0ac,-80],[roadPositions,0x626a69,-70],[stripePositions,0xc7b992,-40]]){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));g.computeVertexNormals();const layer=mesh(root,g,color);layer.material.depthTest=false;layer.material.depthWrite=false;layer.renderOrder=order;}
  // Procedural facade shading on real footprints: metric windows, sills and night lights.
  const night={value:0};
- const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78,metalness:.13,side:THREE.DoubleSide});
- mat.onBeforeCompile=s=>{
-  s.uniforms.night=night;
-  s.vertexShader=s.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 facadeUV;').replace('#include <uv_vertex>','#include <uv_vertex>\nfacadeUV=uv;');
-  s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 facadeUV; uniform float night;');
-  s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-    vec2 cell = fract(facadeUV); float wall=step(0.0,facadeUV.y);
-    float footprint=max(length(dFdx(facadeUV)),length(dFdy(facadeUV)));
-    float detail=1.0-smoothstep(.06,.30,footprint);
-    float win=step(.18,cell.x)*step(cell.x,.78)*step(.20,cell.y)*step(cell.y,.80)*wall*detail;
-    float hash=fract(sin(dot(floor(facadeUV),vec2(127.1,311.7)))*43758.5453);
-    diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.46,.63,.69),win*.70);
-    diffuseColor.rgb*=1.0-.10*step(.92,cell.y)*wall*detail;
-    float lit=win*step(.57,hash)*night;
-  `).replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0,.59,.23)*lit*.65;');
- };
+ const mat=createFacadeMaterial(THREE,night);
  const chunks=new Map(),palette=[0xb9b5a9,0x92a5a7,0xc4b399,0xa79a8b,0x9fadb2,0xb4b5a7].map(c=>new THREE.Color(c));
  const wtc=geo(-74.01338,40.7130);
  for(let index=0;index<map.buildings.length;index++) {
   const b=map.buildings[index];
-  if(Math.hypot(b.cx-wtc.x,b.cz-wtc.z)<38&&b.h>300){b.special='wtc';b.h=429;continue;}
+  if(Math.hypot(b.cx-wtc.x,b.cz-wtc.z)<38&&b.h>300){b.special='wtc';b.detail=null;b.h=429;continue;}
   const key=`${Math.floor(b.cx/420)},${Math.floor(b.cz/420)}`;
-  if(!chunks.has(key))chunks.set(key,{p:[],n:[],uv:[],c:[]});const chunk=chunks.get(key),color=palette[Math.floor(rand(b.id)*palette.length)];
-  const push=(x,y,z,nx,ny,nz,u,v,roof=false)=>{chunk.p.push(x,y,z);chunk.n.push(nx,ny,nz);chunk.uv.push(u,v);chunk.c.push(color.r*(roof?.83:1),color.g*(roof?.83:1),color.b*(roof?.83:1));};
+  if(!chunks.has(key))chunks.set(key,{p:[],n:[],uv:[],c:[],f:[]});const chunk=chunks.get(key),style=facadeStyle(b),color=style.color||palette[Math.floor(rand(b.id)*palette.length)];
+  const push=(x,y,z,nx,ny,nz,u,v,roof=false,kind=roof?7:style.kind)=>{chunk.p.push(x,y,z);chunk.n.push(nx,ny,nz);chunk.uv.push(u,v);chunk.c.push(color.r*(roof?.83:1),color.g*(roof?.83:1),color.b*(roof?.83:1));chunk.f.push(kind);};
+  if(b.detail) {
+   const {vertices,indices}=b.detail;
+   for(let i=0;i<indices.length;i+=3) {
+    const ids=[indices[i],indices[i+1],indices[i+2]],pts=ids.map(id=>[b.cx+vertices[id*3],vertices[id*3+1],b.cz+vertices[id*3+2]]);
+    const a=pts[0],d=pts[1],e=pts[2],ab=[d[0]-a[0],d[1]-a[1],d[2]-a[2]],ac=[e[0]-a[0],e[1]-a[1],e[2]-a[2]];
+    let nx=ab[1]*ac[2]-ab[2]*ac[1],ny=ab[2]*ac[0]-ab[0]*ac[2],nz=ab[0]*ac[1]-ab[1]*ac[0],len=Math.hypot(nx,ny,nz)||1;nx/=len;ny/=len;nz/=len;
+    const roof=Math.abs(ny)>.035;if(roof&&ny<0){pts.reverse();ny=-ny;nx=-nx;nz=-nz;}
+    let tx=1,tz=0,longest=0;
+    if(!roof)for(let j=0;j<3;j++){const p=pts[j],q=pts[(j+1)%3],dx=q[0]-p[0],dz=q[2]-p[2],l=Math.hypot(dx,dz);if(l>longest){longest=l;tx=dx/l;tz=dz/l;}}
+    if(tx<0||(Math.abs(tx)<1e-6&&tz<0)){tx=-tx;tz=-tz;}
+    for(const p of pts)push(p[0],p[1],p[2],nx,ny,nz,roof?-Math.abs(p[0]-b.cx)/3:(p[0]*tx+p[2]*tz)/3,roof?-1:p[1]/3.3,roof,roof?7:style.kind);
+   }
+   if(index%3500===0){progress?.(index/map.buildings.length);await new Promise(r=>setTimeout(r,0));}
+   continue;
+  }
   for(const ring of b.rings)for(let i=0;i<ring.length;i++) {
    const a=ring[i],d=ring[(i+1)%ring.length],dx=d[0]-a[0],dz=d[1]-a[1],l=Math.hypot(dx,dz);if(!l)continue;
    const area=ring.reduce((sum,p,j)=>{const q=ring[(j+1)%ring.length];return sum+p[0]*q[1]-q[0]*p[1];},0);
@@ -59,9 +60,9 @@ export async function buildCity(scene,map,progress) {
   for(const face of THREE.ShapeUtils.triangulateShape(contours[0],contours.slice(1)))for(const i of [...face].reverse())push(flat[i][0],b.h,flat[i][1],0,1,0,0,-1,true);
   if(index%3500===0){progress?.(index/map.buildings.length);await new Promise(r=>setTimeout(r,0));}
  }
- for(const c of chunks.values()) {const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(c.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(c.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(c.uv,2));g.setAttribute('color',new THREE.Float32BufferAttribute(c.c,3));g.computeBoundingSphere();root.add(new THREE.Mesh(g,mat));}
+ for(const c of chunks.values()) {const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(c.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(c.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(c.uv,2));g.setAttribute('color',new THREE.Float32BufferAttribute(c.c,3));g.setAttribute('facadeKind',new THREE.Float32BufferAttribute(c.f,1));g.computeBoundingSphere();root.add(new THREE.Mesh(g,mat));}
  // Roof equipment and raised cornices add scale without individual draw calls.
- const roofs=map.buildings.filter(b=>b.h>10&&b.x1-b.x0>8&&b.z1-b.z0>8&&b.special!=='wtc');
+ const roofs=map.buildings.filter(b=>!b.detail&&b.h>10&&b.x1-b.x0>8&&b.z1-b.z0>8&&b.special!=='wtc');
  const units=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x7f8989,roughness:.9}),roofs.length);
  const dummy=new THREE.Object3D();
  roofs.forEach((b,i)=>{dummy.position.set(b.cx,b.h+1.1,b.cz);dummy.scale.set(Math.min(6,(b.x1-b.x0)*.2),2.2,Math.min(5,(b.z1-b.z0)*.2));dummy.rotation.y=rand(i)*Math.PI;dummy.updateMatrix();units.setMatrixAt(i,dummy.matrix);});root.add(units);
@@ -73,9 +74,5 @@ export async function buildCity(scene,map,progress) {
  const wg=new THREE.BufferGeometry();wg.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));wg.computeVertexNormals();mesh(root,wg,0x94b4be);
  box(root,0xb5c5c8,wtc.x,6,wtc.z,56,12,56);
  mesh(root,new THREE.CylinderGeometry(.9,2.5,112,10),0xb8bfc0,wtc.x,485,wtc.z);
- // Spires on accurately placed landmark footprints.
- for(const [lon,lat,baseY,height,color] of [[-74.009,40.7069,240,42,0xb0ad97],[-74.0079,40.7135,190,50,0x8eaea4],[-73.9857,40.7484,381,62,0xbbbdaf]]){
-  const p=geo(lon,lat);mesh(root,new THREE.CylinderGeometry(.5,3,height,8),color,p.x,baseY+height/2,p.z);
- }
  return {root,night,chunks:chunks.size};
 }
