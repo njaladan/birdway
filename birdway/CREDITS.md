@@ -1,0 +1,12 @@
+# Sources and accuracy
+
+Birdway's application, bird model, shaders, ambient music and street props are original. No map API, runtime CDN or paid account is required.
+
+- **Buildings:** NYC Open Data Building Footprints, dataset `5zhs-2jue`, sourced from the compact data snapshot in [anchitjaincfa/manhattan-3d](https://github.com/anchitjaincfa/manhattan-3d), whose README records a July 9, 2026 retrieval. Only geographic data was extracted; no upstream application code was copied. [NYC dataset](https://data.cityofnewyork.us/City-Government/Building-Footprints/5zhs-2jue), [official metadata](https://github.com/CityOfNewYork/nyc-geo-metadata/blob/main/Metadata/Metadata_BuildingFootprints.md). Footprints quantized to approximately 1 metre. Roof heights converted from feet to metres; missing heights use the source's 4m fallback. Flat roof extrusion does not reproduce every setback or architectural detail.
+- **Coast / land:** NYC Department of City Planning borough boundaries, from [dwillis/nyc-maps](https://github.com/dwillis/nyc-maps/blob/master/boroughs.geojson). Coast vertices simplified to approximately 5m spacing; historical snapshot, not a current tide line.
+- **Streets:** geographic centerline data mirrored in [fillerwriter/nyc-streets](https://github.com/fillerwriter/nyc-streets/blob/master/nyc-streets.geojson). `STATEFP`, `COUNTYFP`, `LINEARID`, `FULLNAME`, `RTTYP`, and `MTFCC` fields follow US Census TIGER/Line. Widths, sidewalks, markings and street furniture are artistic approximations; centerline locations come from this data.
+- **Three.js:** vendored v0.180.0, MIT license (see vendor/THREE-LICENSE.txt).
+
+Coverage is Manhattan south of an approximate geographic line along 59th Street. Land beyond the playable buildings provides distant context. Brooklyn and New Jersey are shoreline silhouettes, without full building coverage. One World Trade Center has a custom stylized tapered form and mast; other buildings use measured footprints and roof heights with procedural windows. Landmark crowns and the Brooklyn Bridge are stylized. Parks and activities are hand-placed. This is a geographically grounded game, not a photogrammetric or survey-quality digital twin.
+
+To refresh the bundled map, download the three source inputs and run `python3 tools/prepare-map.py payload.json boroughs.geojson streets.geojson`. No Python packages are required. Data remains governed by its original source terms; attribution does not imply City endorsement.
