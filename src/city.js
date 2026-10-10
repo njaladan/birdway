@@ -31,10 +31,12 @@ export async function buildCity(scene,map,progress) {
   s.fragmentShader=s.fragmentShader.replace('#include <common>','#include <common>\nvarying vec2 facadeUV; uniform float night;');
   s.fragmentShader=s.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
     vec2 cell = fract(facadeUV); float wall=step(0.0,facadeUV.y);
-    float win=step(.18,cell.x)*step(cell.x,.78)*step(.20,cell.y)*step(cell.y,.80)*wall;
+    float footprint=max(length(dFdx(facadeUV)),length(dFdy(facadeUV)));
+    float detail=1.0-smoothstep(.06,.30,footprint);
+    float win=step(.18,cell.x)*step(cell.x,.78)*step(.20,cell.y)*step(cell.y,.80)*wall*detail;
     float hash=fract(sin(dot(floor(facadeUV),vec2(127.1,311.7)))*43758.5453);
     diffuseColor.rgb=mix(diffuseColor.rgb,diffuseColor.rgb*vec3(.46,.63,.69),win*.70);
-    diffuseColor.rgb*=1.0-.10*step(.92,cell.y)*wall;
+    diffuseColor.rgb*=1.0-.10*step(.92,cell.y)*wall*detail;
     float lit=win*step(.57,hash)*night;
   `).replace('#include <emissivemap_fragment>','#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0,.59,.23)*lit*.65;');
  };
