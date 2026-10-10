@@ -117,7 +117,7 @@ export function createGrassDetail(scene,data,map=null){
  }
  function update(position){
   birdPosition.value.set(position.x,position.z);
-  if(position.y>40){for(const mesh of live.values()){root.remove(mesh);mesh.geometry.dispose();}live.clear();return;}
+  if(position.y>40){for(const mesh of live.values())if(mesh){root.remove(mesh);mesh.geometry.dispose();}live.clear();return;}
   const tx=Math.floor(position.x/TILE),tz=Math.floor(position.z/TILE),range=Math.ceil(DETAIL_RADIUS/TILE)+1,needed=new Set();
   for(let x=tx-range;x<=tx+range;x++)for(let z=tz-range;z<=tz+range;z++){
    if(Math.hypot((x+.5)*TILE-position.x,(z+.5)*TILE-position.z)<=DETAIL_RADIUS+TILE*.72){

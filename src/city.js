@@ -1,6 +1,8 @@
 import * as THREE from '../vendor/three.module.js';
 import {geo} from './geography.js';
 import {createFacadeMaterial,facadeStyle} from './facades.js';
+import {makeGroundMaterial} from './ground.js';
+import {buildWorldTradeCenter} from './landmarks.js';
 export const rand=(n)=>{const r=Math.sin(n*127.1+311.7)*43758.5453;return r-Math.floor(r);};
 export function mesh(parent,geometry,color,x=0,y=0,z=0) {const m=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.8}));m.position.set(x,y,z);parent.add(m);return m;}
 export function box(parent,color,x,y,z,w,h,d) {return mesh(parent,new THREE.BoxGeometry(w,h,d),color,x,y,z);}
@@ -9,11 +11,13 @@ function flatPolygon(rings,y,color,parent) {
  const shape=new THREE.Shape(rings[0].map(p=>new THREE.Vector2(p[0],-p[1])));
  for(const ring of rings.slice(1))shape.holes.push(new THREE.Path(ring.map(p=>new THREE.Vector2(p[0],-p[1]))));
  const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);
- const m=mesh(parent,g,color,0,y,0);m.material.depthTest=false;m.material.depthWrite=false;m.renderOrder=-90;return m;
+ g.setAttribute('color',new THREE.Float32BufferAttribute(Array.from({length:g.attributes.position.count},()=>new THREE.Color(color).toArray()).flat(),3));
+ g.setAttribute('groundKind',new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count).fill(1),1));
+ const m=new THREE.Mesh(g,makeGroundMaterial());m.position.y=y;m.renderOrder=-90;m.receiveShadow=true;parent.add(m);return m;
 }
 export async function buildCity(scene,map,progress) {
  const root=new THREE.Group();scene.add(root);
- for(const p of map.land)flatPolygon(p.rings,-.25,p.name==='Manhattan'?0xaaa89a:0x8e9e91,root);
+ for(const p of map.land)flatPolygon(p.rings,0,p.name==='Manhattan'?0xaaa89a:0x8e9e91,root);
  // Actual centerlines, with a sidewalk strip and roadbed. All geometries share one buffer.
  const roadPositions=[],curbPositions=[],stripePositions=[];
  function roadStrip(array,a,b,width,y){const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz);if(l<.01)return;const nx=-dz/l*width/2,nz=dx/l*width/2;const v=[[a[0]+nx,y,a[1]+nz],[a[0]-nx,y,a[1]-nz],[b[0]+nx,y,b[1]+nz],[b[0]-nx,y,b[1]-nz]];for(const i of [0,2,1,1,2,3])array.push(...v[i]);}
@@ -22,15 +26,21 @@ export async function buildCity(scene,map,progress) {
   roadStrip(curbPositions,a,b,wide+7,.01);roadStrip(roadPositions,a,b,wide,.025);
   if(wide>12)roadStrip(stripePositions,a,b,.16,.035);
  }
- for(const [a,color,order] of [[curbPositions,0xc9c0ac,-80],[roadPositions,0x626a69,-70],[stripePositions,0xc7b992,-40]]){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));g.computeVertexNormals();const layer=mesh(root,g,color);layer.material.depthTest=false;layer.material.depthWrite=false;layer.renderOrder=order;}
+ for(const [a,color,order,kind] of [[curbPositions,0xb7b4aa,-80,1],[roadPositions,0x494d4e,-70,2],[stripePositions,0xc7b992,-40,1]]){
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));g.computeVertexNormals();
+  g.setAttribute('color',new THREE.Float32BufferAttribute(Array.from({length:a.length/3},()=>new THREE.Color(color).toArray()).flat(),3));
+  g.setAttribute('groundKind',new THREE.Float32BufferAttribute(new Float32Array(a.length/3).fill(kind),1));
+  const layer=new THREE.Mesh(g,makeGroundMaterial());layer.renderOrder=order;layer.receiveShadow=true;root.add(layer);
+ }
  // Procedural facade shading on real footprints: metric windows, sills and night lights.
  const night={value:0};
  const mat=createFacadeMaterial(THREE,night);
  const chunks=new Map(),palette=[0xb9b5a9,0x92a5a7,0xc4b399,0xa79a8b,0x9fadb2,0xb4b5a7].map(c=>new THREE.Color(c));
  const wtc=geo(-74.01338,40.7130);
+ let wtcBuilding;
  for(let index=0;index<map.buildings.length;index++) {
   const b=map.buildings[index];
-  if(Math.hypot(b.cx-wtc.x,b.cz-wtc.z)<38&&b.h>300){b.special='wtc';b.detail=null;b.h=429;continue;}
+  if(Math.hypot(b.cx-wtc.x,b.cz-wtc.z)<38&&b.h>300){b.special='wtc';b.detail=null;b.h=417;wtcBuilding=b;continue;}
   const key=`${Math.floor(b.cx/420)},${Math.floor(b.cz/420)}`;
   if(!chunks.has(key))chunks.set(key,{p:[],n:[],uv:[],c:[],f:[]});const chunk=chunks.get(key),style=facadeStyle(b),color=style.color||palette[Math.floor(rand(b.id)*palette.length)];
   const push=(x,y,z,nx,ny,nz,u,v,roof=false,kind=roof?7:style.kind)=>{chunk.p.push(x,y,z);chunk.n.push(nx,ny,nz);chunk.uv.push(u,v);chunk.c.push(color.r*(roof?.83:1),color.g*(roof?.83:1),color.b*(roof?.83:1));chunk.f.push(kind);};
@@ -44,7 +54,7 @@ export async function buildCity(scene,map,progress) {
     let tx=1,tz=0,longest=0;
     if(!roof)for(let j=0;j<3;j++){const p=pts[j],q=pts[(j+1)%3],dx=q[0]-p[0],dz=q[2]-p[2],l=Math.hypot(dx,dz);if(l>longest){longest=l;tx=dx/l;tz=dz/l;}}
     if(tx<0||(Math.abs(tx)<1e-6&&tz<0)){tx=-tx;tz=-tz;}
-    for(const p of pts)push(p[0],p[1],p[2],nx,ny,nz,roof?-Math.abs(p[0]-b.cx)/3:(p[0]*tx+p[2]*tz)/3,roof?-1:p[1]/3.3,roof,roof?7:style.kind);
+    for(const p of pts)push(p[0],p[1],p[2],nx,ny,nz,roof?(p[0]-b.cx)/3:(p[0]*tx+p[2]*tz)/3,roof?(p[2]-b.cz)/3:p[1]/3.3,roof,roof?7:style.kind);
    }
    if(index%3500===0){progress?.(index/map.buildings.length);await new Promise(r=>setTimeout(r,0));}
    continue;
@@ -57,7 +67,7 @@ export async function buildCity(scene,map,progress) {
    for(const [x,y,z,u,v] of order)push(x,y,z,sign*dz/l,0,-sign*dx/l,u,v);
   }
   const contours=b.rings.map(r=>r.map(p=>new THREE.Vector2(p[0],p[1]))),flat=b.rings.flat();
-  for(const face of THREE.ShapeUtils.triangulateShape(contours[0],contours.slice(1)))for(const i of [...face].reverse())push(flat[i][0],b.h,flat[i][1],0,1,0,0,-1,true);
+  for(const face of THREE.ShapeUtils.triangulateShape(contours[0],contours.slice(1)))for(const i of [...face].reverse())push(flat[i][0],b.h,flat[i][1],0,1,0,(flat[i][0]-b.cx)/3,(flat[i][1]-b.cz)/3,true);
   if(index%3500===0){progress?.(index/map.buildings.length);await new Promise(r=>setTimeout(r,0));}
  }
  for(const c of chunks.values()) {const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(c.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(c.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(c.uv,2));g.setAttribute('color',new THREE.Float32BufferAttribute(c.c,3));g.setAttribute('facadeKind',new THREE.Float32BufferAttribute(c.f,1));g.computeBoundingSphere();root.add(new THREE.Mesh(g,mat));}
@@ -66,13 +76,6 @@ export async function buildCity(scene,map,progress) {
  const units=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x7f8989,roughness:.9}),roofs.length);
  const dummy=new THREE.Object3D();
  roofs.forEach((b,i)=>{dummy.position.set(b.cx,b.h+1.1,b.cz);dummy.scale.set(Math.min(6,(b.x1-b.x0)*.2),2.2,Math.min(5,(b.z1-b.z0)*.2));dummy.rotation.y=rand(i)*Math.PI;dummy.updateMatrix();units.setMatrixAt(i,dummy.matrix);});root.add(units);
- // One WTC's eight tapering faces and mast, placed in its measured footprint.
- const vertices=[]; const size=28,top=20,h=417;
- const base=[[-size,-size],[size,-size],[size,size],[-size,size]];
- const upper=[[0,-top*1.414],[top*1.414,0],[0,top*1.414],[-top*1.414,0]];
- for(let i=0;i<4;i++){const j=(i+1)%4;for(const p of [[...base[i],0],[...base[j],0],[...upper[i],h],[...upper[i],h],[...base[j],0],[...upper[j],h]])vertices.push(wtc.x+p[0],p[2]+12,wtc.z+p[1]);}
- const wg=new THREE.BufferGeometry();wg.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));wg.computeVertexNormals();mesh(root,wg,0x94b4be);
- box(root,0xb5c5c8,wtc.x,6,wtc.z,56,12,56);
- mesh(root,new THREE.CylinderGeometry(.9,2.5,112,10),0xb8bfc0,wtc.x,485,wtc.z);
+ if(wtcBuilding)buildWorldTradeCenter(root,wtcBuilding,mat);
  return {root,night,chunks:chunks.size};
 }

@@ -21,6 +21,8 @@ The entire repository is a static website. To host it, serve this directory with
 - A CC0 rigged pigeon, about 35 cm long with a roughly 65 cm wingspan, with animated flight, folded-wing idle, walking and pecking.
 - Smooth acceleration, banking, climb/descent, faster gliding, trailing camera with a downward view during dives, automatic ledge takeoff, forgiving facade collisions, rooftop and street landing, and ground waddling. No damage, hunger, lives or timed goals.
 - Day/night cycle (24-minute day), adjustable time and 1–60 minute cycle length, time presets, golden skies, calm water, stars and illuminated windows.
+- Filtered directional river waves and sun reflections, layered drifting clouds, and prefiltered sky lighting for glass. CC0 photographic brick, concrete, metal, asphalt, grass and soil materials are bundled locally.
+- Branching 9–15 m trees with licensed leaf atlases, textured bark, gentle wind and distance-based detail. Park turf has surface relief and nearby grass blades; Battery/BPC paving uses small hexagonal joints. Seawalls follow the mapped shoreline, with railings and furniture near named Esplanade paths.
 - A rooftop nest. Carry food home, peck a snack, bring shiny finds back, decorate the nest, and welcome up to five flock companions. Every two delivered bites invites a friend.
 - **17 neighborhood discoveries:** bagel/pretzel carts, picnic/bakery/café crumbs, shiny keepsakes, fountain bathing, steam updrafts, cooing with a busker and a neighbor, rooftop flowers and laundry perches.
 - **12 landmark postcards**, a field guide with destinations, local minimap, city map, and a direction/distance hint when you choose an outing.
@@ -56,7 +58,7 @@ For a landing, press E, steer above the chosen surface, and let your pigeon sett
 
 ## Performance
 
-Balanced caps pixel ratio at 1.5 and uses local 1024-pixel shadows; Light uses pixel ratio 1 and disables shadows; High uses pixel ratio 2 and shadows. Use Settings → Light on a large Retina display if needed. Building, park, and path geometry is batched by spatial chunk. Roof equipment and trees are instanced; each rigged pigeon uses one skinned draw call; distant small props and traffic are hidden. There is no postprocessing, streaming imagery or physics engine.
+Balanced caps pixel ratio at 1.5 and uses local 1024-pixel shadows; Light uses pixel ratio 1 and disables shadows; High uses pixel ratio 2 and shadows. Use Settings → Light on a large Retina display if needed. Building, park, and path geometry is batched by spatial chunk. Roof equipment and trees are instanced; trees switch between detailed and sparse canopy cards by distance; grass blades are generated within 35 m and cleared above 40 m; each rigged pigeon uses one skinned draw call; distant small props and traffic are hidden. There is no postprocessing, streaming imagery or physics engine.
 
 Near roofs, the flight model targets 35 m/s cruise and 55 m/s glide; between 30 and 100 m above the local roof, it smoothly increases toward 100 m/s cruise and 135 m/s glide. A dash targets 90 m/s near roofs or 200 m/s aloft for 1.2 seconds, with a two-second cooldown. Ground walking targets 1.2 m/s. These are game movement values, not a measured biological simulation.
 
@@ -64,7 +66,7 @@ The implementation targets an M1 MacBook Pro, but no M1 hardware benchmark has b
 
 ## Limits / simplified parts
 
-This is a geographically grounded, stylized game, not photogrammetry. Footprints reflect their source snapshot and are quantized to about one metre. The 2014 roof survey is matched to the newer footprints by location and dimensions; unmatched or newer construction uses its footprint and fallback roof height. PLUTO 2017 year-built and building-class fields guide eight procedural façade families. Those façades are approximations, not scans, and do not reproduce every setback, material or current construction. One WTC has a modeled taper and mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. OSM park boundaries, paths, and tree positions are real mapped features, while their rendering, road widths, traffic, people and street props are stylized. Distant neighboring boroughs have land silhouettes, without full building coverage.
+This is a geographically grounded, stylized game, not photogrammetry. Footprints reflect their source snapshot and are quantized to about one metre. The 2014 roof survey is matched to the newer footprints by location and dimensions; unmatched or newer construction uses its footprint and fallback roof height. PLUTO 2017 year-built and building-class fields guide eight generated façade families, with photographic material maps. Those façades are approximations, not scans, and do not reproduce every setback, material or current construction. One WTC has a footprint-aligned 200-foot base, taper, 417 m roof and 541 m mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. OSM park boundaries, paths, and tree positions are real mapped features, while their rendering, road widths, traffic, people and street props are stylized. Distant neighboring boroughs have land silhouettes, without full building coverage.
 
 Tiny moments are deliberately lightweight: bathing splashes, gardening adds flowers, music answers your coo, and resting gives a quiet pause. Human characters and vehicles follow simple short paths, with no social or traffic simulation. Companion birds follow you; they do not have independent schedules. No interiors, dialogue trees, multiplayer or cloud save.
 
@@ -72,7 +74,7 @@ See [CREDITS.md](CREDITS.md) for map sources, provenance and accuracy. `tools/pr
 
 ## Code layout and checks
 
-`src/main.js` connects the small modules: `flight.js`, `bird.js`, `geography.js`, `city.js`, `facades.js`, `parks.js`, `sky.js`, `life.js`, `content.js`, `interface.js`, and `audio.js`. `vendor/` contains Three.js; `data/` contains bundled geography and derived map data. Plain JavaScript and CSS; no framework.
+`src/main.js` connects the small game modules. Rendering is split into `city.js`, `facades.js`, `landmarks.js`, `parks.js`, `ground.js`, `trees.js`, `waterfront.js`, `sky.js`, `water.js`, and `environment.js`. `vendor/` contains Three.js; `data/` contains bundled geography and derived map data; `assets/` contains the rig and licensed materials. Plain JavaScript and CSS; no framework.
 
 ```sh
 npm run check

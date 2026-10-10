@@ -8,19 +8,23 @@ import {CityLife} from './life.js';
 import {GameInterface} from './interface.js';
 import {AmbientAudio} from './audio.js';
 import {loadParks} from './parks.js';
+import {makeEnvironment} from './environment.js';
+import {loadFacadeTextures} from './facades.js';
+import {buildWaterfront} from './waterfront.js';
 const $=id=>document.getElementById(id);
-let renderer,scene,camera,map,city,sky,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio();
+let renderer,scene,camera,map,city,sky,environment,waterfront,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio();
 const toast=(message)=>{ $('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.remove('show'),4200);};
 async function boot(){
  try{
   renderer=new THREE.WebGLRenderer({canvas:$('world'),antialias:true,alpha:false,logarithmicDepthBuffer:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,16000);sky=makeSky(scene);
+  scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,16000);sky=makeSky(scene);environment=makeEnvironment(renderer,scene,sky);
   $('loading-progress').style.width='10%';map=await loadGeography();await loadBirdModel();$('loading-note').textContent='Opening 20,868 windows onto Manhattan…';
+  const [parkData]=await Promise.all([loadParks(),loadFacadeTextures()]);
   city=await buildCity(scene,map,p=>$('loading-progress').style.width=`${15+p*65}%`);
   city.root.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.material.depthWrite!==false)o.castShadow=true;}});
-  const parkData=await loadParks();
+  waterfront=buildWaterfront(scene,map,parkData);
   const near=geo(-74.01805,40.709);const home=map.buildings.filter(b=>b.h>120&&b.h<170&&Math.min(b.x1-b.x0,b.z1-b.z0)>12).sort((a,b)=>Math.hypot(a.cx-near.x,a.cz-near.z)-Math.hypot(b.cx-near.x,b.cz-near.z))[0];
   // Choose a point strictly inside the actual roof, including irregular footprints.
   let hx=home.cx,hz=home.cz;
@@ -38,7 +42,7 @@ async function boot(){
   const bird=makeBird();scene.add(bird);flight=new Flight(bird,camera,map,nest);flight.heading=-.60;flight.cameraTarget.copy(nest);
   life=new CityLife(scene,map,flight,nest,audio,toast,parkData);hours=life.save.hours;ui=new GameInterface({life,flight,map,nest,renderer,scene,camera,toast,openModal,closeModal});
   flight.onEvent=event=>{if(event==='dash')toast('A quick beat of the wings.');if(event==='perch')toast('A soft landing. Stay a while.');if(event==='landing')toast('Wings tucked. Guide yourself down to a roof or street.');};
-  $('loading-progress').style.width='100%';sky.update(hours,0,nest);for(let i=0;i<100;i++)flight.update(.016);renderer.render(scene,camera);
+  $('loading-progress').style.width='100%';const initialLight=sky.update(hours,0,nest);city.night.value=initialLight.night;environment.update(hours);life.parks.update(nest,0);waterfront.update(nest,initialLight.night);for(let i=0;i<100;i++)flight.update(.016);renderer.render(scene,camera);
   $('loading').hidden=true;$('welcome').hidden=false;
   installControls();requestAnimationFrame(frame);
  }catch(error){console.error(error);$('loading-note').textContent=error.message;$('loading-progress').style.width='0';}
@@ -75,7 +79,7 @@ function drawMinimap(){const canvas=$('minimap'),ctx=canvas.getContext('2d'),w=c
  ctx.fillStyle='#ac8d54';ctx.beginPath();ctx.arc(nest.x,nest.z,28,0,Math.PI*2);ctx.fill();ctx.restore();ctx.save();ctx.translate(w/2,h/2);ctx.rotate(-flight.heading);ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(-4,5);ctx.lineTo(0,2);ctx.lineTo(4,5);ctx.closePath();ctx.fillStyle='#445f46';ctx.fill();ctx.restore();}
 function frame(time){requestAnimationFrame(frame);const dt=Math.min((time-last)/1000||.016,.035);last=time;if(document.hidden)return;
  if(started&&!paused){elapsed+=dt;if(autoTime)hours=(hours+dt*24/(dayLength*60))%24;flight.update(dt);life.update(dt);life.save.hours=hours;}
- const light=sky.update(hours,elapsed,flight.position);city.night.value=light.night;
+ const light=sky.update(hours,elapsed,flight.position);city.night.value=light.night;environment.update(hours);waterfront.update(flight.position,light.night);
  renderer.render(scene,camera);
  
  if(started){$('mode').textContent=flight.flying?(flight.landing?'COMING TO REST':'ON THE BREEZE'):'A LITTLE WADDLE';$('altitude').textContent=`${Math.round(flight.position.y)} m`;const hh=Math.floor(hours),mm=Math.floor((hours-hh)*60);$('clock').textContent=`${hh%12||12}:${String(mm).padStart(2,'0')} ${hh>=12?'PM':'AM'}`;ui.update();if(Math.floor(time/150)!==frame.mapTick){frame.mapTick=Math.floor(time/150);drawMinimap();ui.mapMarkers($('minimap'),.095,flight.position);}}

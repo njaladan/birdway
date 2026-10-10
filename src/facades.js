@@ -48,31 +48,108 @@ export function facadeStyle(b) {
   return { kind, color };
 }
 
+// The three atlas maps are built by tools/prepare-facade-textures.py from the
+// bundled CC0 ambientCG maps and one original curtain-wall tile. Each tile
+// covers a 3 m x 3.3 m facade repeat.
+let facadeTextures;
+let facadeTexturePromise;
+function getFacadeTextureMaps(THREEArg) {
+  if (facadeTextures) return facadeTextures;
+  const neutral = (rgb, color = false) => {
+    const t = new THREEArg.DataTexture(new Uint8Array([...rgb,255]), 1, 1, THREEArg.RGBAFormat);
+    t.needsUpdate = true;
+    t.wrapS = t.wrapT = THREEArg.RepeatWrapping;
+    if (color && 'colorSpace' in t) t.colorSpace = THREEArg.SRGBColorSpace;
+    return t;
+  };
+  facadeTextures = {
+    color: neutral([255, 255, 255], true),
+    height: neutral([128, 128, 128]),
+    roughness: neutral([225, 225, 225]),
+  };
+  return facadeTextures;
+}
+
+/**
+ * Preload all facade maps. Safe to await in Node (which has no DOM/ImageLoader)
+ * and useful to await before the first browser render to avoid neutral maps
+ * appearing for a frame. createFacadeMaterial remains synchronous.
+ */
+export function loadFacadeTextures(THREEArg = THREE) {
+  const maps = getFacadeTextureMaps(THREEArg);
+  if (typeof document === 'undefined' || !THREEArg.TextureLoader) return Promise.resolve(maps);
+  if (facadeTexturePromise) return facadeTexturePromise;
+  const loader = new THREEArg.TextureLoader();
+  facadeTexturePromise = Promise.all(['color', 'height', 'roughness'].map(name => new Promise((resolve, reject) => {
+    const texture = loader.load(
+      new URL(`../assets/facades/${name}.jpg`, import.meta.url).href,
+      loaded => resolve(loaded),
+      undefined,
+      reject,
+    );
+    texture.wrapS = texture.wrapT = THREEArg.RepeatWrapping;
+    texture.generateMipmaps = true;
+    texture.minFilter = THREEArg.LinearMipmapLinearFilter;
+    texture.magFilter = THREEArg.LinearFilter;
+    texture.anisotropy = 8;
+    if (name === 'color' && 'colorSpace' in texture) texture.colorSpace = THREEArg.SRGBColorSpace;
+    maps[name] = texture;
+  }))).then(() => maps);
+  return facadeTexturePromise;
+}
+
 export function createFacadeMaterial(THREEArg, night) {
+  const maps = getFacadeTextureMaps(THREEArg);
   const mat = new THREEArg.MeshStandardMaterial({
     vertexColors: true,
-    roughness: 0.82,
-    metalness: 0.035,
+    roughness: 0.88,
+    metalness: 0.025,
     side: THREEArg.DoubleSide,
   });
   mat.onBeforeCompile = shader => {
     shader.uniforms.night = night;
+    shader.uniforms.facadeColorMap = { value: maps.color };
+    shader.uniforms.facadeHeightMap = { value: maps.height };
+    shader.uniforms.facadeRoughnessMap = { value: maps.roughness };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float facadeKind;\nvarying float vFacadeKind;\nvarying vec2 vFacadeUv;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvFacadeUv = uv;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFacadeKind = facadeKind;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vFacadeKind;\nvarying vec2 vFacadeUv;\nuniform float night;')
+      .replace('#include <common>', '#include <common>\nvarying float vFacadeKind;\nvarying vec2 vFacadeUv;\nuniform float night;\nuniform sampler2D facadeColorMap;\nuniform sampler2D facadeHeightMap;\nuniform sampler2D facadeRoughnessMap;')
       .replace('#include <color_fragment>', `#include <color_fragment>
         float kind = floor(vFacadeKind + 0.5);
         vec2 cell = fract(vFacadeUv);
+        // The atlas has 8 individually authored repeat tiles, with a narrow
+        // inset that keeps mip filtering from bleeding neighboring materials.
+        vec2 tile = vec2(mod(kind, 4.0), floor(kind / 4.0));
+        vec2 atlasUv = (tile + vec2(0.018) + cell * 0.964) / vec2(4.0, 2.0);
+        // Derive mip gradients from the unwrapped metric UVs. atlasUv wraps at
+        // each floor and tile edge, so implicit derivatives there pick an
+        // enormous mip footprint and shimmer or sample a neighboring tile.
+        vec2 atlasGradX = dFdx(vFacadeUv) * vec2(0.964 / 4.0, 0.964 / 2.0);
+        vec2 atlasGradY = dFdy(vFacadeUv) * vec2(0.964 / 4.0, 0.964 / 2.0);
+        vec3 surfaceColor = textureGrad(facadeColorMap, atlasUv, atlasGradX, atlasGradY).rgb;
+        // Vertex colors retain the PLUTO-derived building palette. Normalize
+        // each authored tile by its measured linear-light mean so its real
+        // mortar, stone grain and patina become surface detail without
+        // multiplying the building color by the material's average albedo.
+        vec3 tileMean = vec3(0.240, 0.240, 0.238);
+        if (kind > 0.5) tileMean = vec3(0.248, 0.216, 0.163);
+        if (kind > 1.5) tileMean = vec3(0.158, 0.155, 0.146);
+        if (kind > 2.5) tileMean = vec3(0.248, 0.216, 0.163);
+        if (kind > 3.5) tileMean = vec3(0.122, 0.195, 0.212);
+        if (kind > 4.5) tileMean = vec3(0.248, 0.216, 0.163);
+        if (kind > 5.5) tileMean = vec3(0.240, 0.240, 0.238);
+        if (kind > 6.5) tileMean = vec3(0.119, 0.120, 0.108);
+        diffuseColor.rgb *= surfaceColor / tileMean;
         float roof = step(6.5, kind);
         float screenCell = max(length(dFdx(vFacadeUv)), length(dFdy(vFacadeUv)));
         float detail = 1.0 - smoothstep(0.04, 0.20, screenCell);
 
         // Recessed window openings, with dark glass, a soft reflected sky and
         // narrow stone or metal frames. Dimensions are tied to the metric UVs.
-        vec2 edgeAA = max(fwidth(cell), vec2(0.003));
+        vec2 edgeAA = max(fwidth(vFacadeUv), vec2(0.003));
         float inset = smoothstep(0.105 - edgeAA.x, 0.105 + edgeAA.x, cell.x)
                     * (1.0 - smoothstep(0.895 - edgeAA.x, 0.895 + edgeAA.x, cell.x))
                     * smoothstep(0.13 - edgeAA.y, 0.13 + edgeAA.y, cell.y)
@@ -84,10 +161,16 @@ export function createFacadeMaterial(THREEArg, night) {
                         * smoothstep(0.075 - edgeAA.y, 0.075 + edgeAA.y, cell.y)
                         * (1.0 - smoothstep(0.91 - edgeAA.y, 0.91 + edgeAA.y, cell.y));
         float windowShape = mix(inset, tallShape, tall);
-        float windowMask = windowShape * detail * (1.0 - roof);
-        float mullion = max(1.0 - smoothstep(0.018, 0.035, abs(cell.x - 0.5)),
-                            1.0 - smoothstep(0.018, 0.035, abs(cell.y - 0.5)));
-        float glass = windowMask * (1.0 - mullion * 0.82);
+        // Preserve the correct mean glass coverage as individual openings
+        // become smaller than a pixel. Otherwise the entire distant skyline
+        // turns into solid masonry when the fine grid is filtered away.
+        float windowAverage = mix(0.44, 0.58, glassKind);
+        float windowCoverage = windowShape * detail + windowAverage * (1.0 - detail);
+        float windowMask = windowCoverage * (1.0 - roof);
+        float mullion = max(1.0 - smoothstep(0.018, 0.035 + edgeAA.x, abs(cell.x - 0.5)),
+                            1.0 - smoothstep(0.018, 0.035 + edgeAA.y, abs(cell.y - 0.5))) * detail;
+        float glass = (windowShape * detail * (1.0 - mullion * 0.82)
+                     + windowAverage * (1.0 - detail)) * (1.0 - roof);
         vec3 reflected = mix(vec3(0.095, 0.15, 0.18), vec3(0.27, 0.37, 0.39),
                              smoothstep(0.04, 0.96, cell.y));
         reflected += vec3(0.075, 0.095, 0.09) * (0.5 + 0.5 * sin(vFacadeUv.y * 2.4));
@@ -115,7 +198,30 @@ export function createFacadeMaterial(THREEArg, night) {
         float hash = fract(sin(dot(floor(vFacadeUv), vec2(127.1, 311.7))) * 43758.5453);
         float lamps = windowMask * (1.0 - glassKind) * step(0.59, hash) * night;
       `)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        float atlasRoughness = textureGrad(facadeRoughnessMap, atlasUv, atlasGradX, atlasGradY).r;
+        roughnessFactor *= mix(atlasRoughness, 0.19, glass);
+      `)
+      .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
+        float castIron = step(1.5, kind) * (1.0 - step(2.5, kind));
+        metalnessFactor = max(metalnessFactor, castIron * 0.18 * detail);
+      `)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        // Derivative bump mapping adds shallow mortar, stone and aggregate
+        // relief without extra geometry or a tangent buffer on city meshes.
+        float h0 = textureGrad(facadeHeightMap, atlasUv, atlasGradX, atlasGradY).r;
+        vec2 dh = vec2(textureGrad(facadeHeightMap, atlasUv + atlasGradX, atlasGradX, atlasGradY).r - h0,
+                       textureGrad(facadeHeightMap, atlasUv + atlasGradY, atlasGradX, atlasGradY).r - h0);
+        vec3 sigmaX = normalize(dFdx(-vViewPosition));
+        vec3 sigmaY = normalize(dFdy(-vViewPosition));
+        vec3 r1 = cross(sigmaY, normal);
+        vec3 r2 = cross(normal, sigmaX);
+        float det = dot(sigmaX, r1) * faceDirection;
+        vec3 grad = sign(det) * (dh.x * r1 + dh.y * r2);
+        normal = normalize(abs(det) * normal - grad * (0.055 * detail * (1.0 - windowMask)));
+      `)
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += vec3(1.0, 0.63, 0.31) * lamps * 0.8;');
   };
+  mat.customProgramCacheKey = () => 'birdway-facade-pbr-atlas-v2';
   return mat;
 }
