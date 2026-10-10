@@ -8,7 +8,7 @@ function flatPolygon(rings,y,color,parent) {
  const shape=new THREE.Shape(rings[0].map(p=>new THREE.Vector2(p[0],-p[1])));
  for(const ring of rings.slice(1))shape.holes.push(new THREE.Path(ring.map(p=>new THREE.Vector2(p[0],-p[1]))));
  const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);
- const m=mesh(parent,g,color,0,y,0);return m;
+ const m=mesh(parent,g,color,0,y,0);m.material.depthTest=false;m.material.depthWrite=false;m.renderOrder=-90;return m;
 }
 export async function buildCity(scene,map,progress) {
  const root=new THREE.Group();scene.add(root);
@@ -21,7 +21,7 @@ export async function buildCity(scene,map,progress) {
   roadStrip(curbPositions,a,b,wide+7,.01);roadStrip(roadPositions,a,b,wide,.025);
   if(wide>12)roadStrip(stripePositions,a,b,.16,.035);
  }
- for(const [a,color] of [[curbPositions,0xc9c0ac],[roadPositions,0x626a69],[stripePositions,0xc7b992]]){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));g.computeVertexNormals();mesh(root,g,color);}
+ for(const [a,color,order] of [[curbPositions,0xc9c0ac,-80],[roadPositions,0x626a69,-70],[stripePositions,0xc7b992,-40]]){const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(a,3));g.computeVertexNormals();const layer=mesh(root,g,color);layer.material.depthTest=false;layer.material.depthWrite=false;layer.renderOrder=order;}
  // Procedural facade shading on real footprints: metric windows, sills and night lights.
  const night={value:0};
  const mat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.78,metalness:.13,side:THREE.DoubleSide});

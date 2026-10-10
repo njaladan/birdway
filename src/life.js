@@ -137,7 +137,7 @@ export class CityLife {
  }
  buildParks(){
   const parks=[[-74.0162,40.7036,65],[-74.0175,40.7048,50],[-74.0060,40.7129,48],[-73.9973,40.7308,65],[-73.9832,40.7536,49],[-73.9876,40.7413,50],[-74.0176,40.7170,40]];
-  const spots=[];for(const [lon,lat,radius] of parks){const p=geo(lon,lat);const ground=mesh(this.scene,new THREE.CircleGeometry(radius,40),0x93a77d,p.x,-.05,p.z);ground.rotation.x=-Math.PI/2;
+  const spots=[];for(const [lon,lat,radius] of parks){const p=geo(lon,lat);const ground=mesh(this.scene,new THREE.CircleGeometry(radius,40),0x93a77d,p.x,-.05,p.z);ground.rotation.x=-Math.PI/2;ground.material.depthTest=false;ground.material.depthWrite=false;ground.renderOrder=-60;
    for(let i=0;i<32;i++){const a=rand(i+radius)*Math.PI*2,r=Math.sqrt(rand(i+500+radius))*radius,x=p.x+Math.cos(a)*r,z=p.z+Math.sin(a)*r;if(this.map.onLand(x,z)&&!this.map.buildingAt(x,z))spots.push([x,z,5+rand(i)*4]);}
   }
   const trunk=new THREE.InstancedMesh(new THREE.CylinderGeometry(.2,.3,1,7),new THREE.MeshStandardMaterial({color:0x84785d}),spots.length);

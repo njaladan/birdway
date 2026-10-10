@@ -19,6 +19,7 @@ const home=map.buildings.find(b=>b.h>50&&b.h<90&&map.buildingAt(b.cx,b.cz)?.id==
 const nest=new THREE.Vector3(home.cx,home.h+.68,home.cz),camera=new THREE.PerspectiveCamera(),bird=makeBird(1.65),flight=new Flight(bird,camera,map,nest);
 flight.update(1/60);assert.equal(flight.flying,false);assert.ok(Math.abs(flight.position.y-nest.y)<.01);
 flight.takeoff();flight.keys.add('Space');for(let i=0;i<120;i++)flight.update(1/60);flight.keys.clear();assert.ok(flight.flying);assert.ok(flight.position.y>nest.y+10);assert.ok(camera.position.distanceTo(flight.position)<60);
+const originalHeading=flight.heading;flight.keys.add('KeyD');for(let i=0;i<12;i++)flight.update(1/60);flight.keys.clear();assert.ok(flight.heading<originalHeading);assert.ok(flight.bank<0,'A right turn lowers the right wing');
 flight.home();assert.equal(flight.flying,false);assert.ok(flight.position.distanceTo(nest)<.01);
 const audio={coo(){},enabled:false},life=new CityLife(new THREE.Scene(),map,flight,nest,audio,()=>{});
 const food=life.moments.find(m=>m.type==='food');assert.equal(map.surface(food.position.x,food.position.z),0,'Food is accessible at street level');

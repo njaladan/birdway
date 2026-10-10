@@ -25,7 +25,7 @@ export class Flight {
   const targetSpeed=this.flying?(this.landing?FLIGHT.landingSpeed:this.dashTime>0?FLIGHT.dash:glide?FLIGHT.glide+dive*24:flap?FLIGHT.flap:FLIGHT.cruise+dive*32):(climb*FLIGHT.walk);
   this.speed=THREE.MathUtils.lerp(this.speed,targetSpeed,smoothing(this.flying?(this.dashTime>0?5:1.7):7));
   this.heading-=turn*FLIGHT.turn*dt*(this.flying?(this.landing?.95:.85):1.9);
-  this.bank=THREE.MathUtils.lerp(this.bank,this.flying?turn*.55:0,smoothing(4.4));
+  this.bank=THREE.MathUtils.lerp(this.bank,this.flying?-turn*.55:0,smoothing(4.4));
   this.pitch=THREE.MathUtils.lerp(this.pitch,this.flying?(dive>.01?-(.42+dive*(FLIGHT.divePitch-.42)):climb*.52+(flap?.13:0)):0,smoothing(2.7));
   const desiredVertical=this.flying?(this.landing?-10+climb*8:Math.sin(this.pitch)*this.speed+(flap?12:0)-(glide?1.2:1.7)):0;
   this.vertical=THREE.MathUtils.lerp(this.vertical,desiredVertical,smoothing(2.5));
