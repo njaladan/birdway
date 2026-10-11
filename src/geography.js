@@ -9,12 +9,12 @@ export function inRing(x,z,ring) {
   }
   return inside;
 }
-function loadDetails(buffer, buildings) {
+function loadDetails(buffer, buildings, baseId=0) {
   const dv=new DataView(buffer);if(buffer.byteLength<4)return;
   let offset=0;const count=dv.getUint32(offset,true);offset+=4;
   for(let n=0;n<count;n++) {
     const id=dv.getUint32(offset,true),vertexCount=dv.getUint16(offset+4,true),triangleCount=dv.getUint32(offset+6,true);offset+=10;
-    const b=buildings[id];
+    const b=buildings[baseId+id];
     if(offset+vertexCount*6+triangleCount*6>buffer.byteLength)throw new Error('The bundled building detail data is truncated.');
     const vertices=new Float32Array(vertexCount*3);
     for(let i=0;i<vertexCount;i++)for(let k=0;k<3;k++)vertices[i*3+k]=dv.getInt16(offset+i*6+k*2,true)/10;
@@ -45,24 +45,36 @@ function roofHeight(b,x,z) {
   return Number.isFinite(highest)?highest:b.h;
 }
 export async function loadGeography() {
-  const [mapResponse,buildingResponse,detailResponse,styleResponse]=await Promise.all([fetch('./data/geography.json'),fetch('./data/buildings.bin'),fetch('./data/buildings-detail.bin'),fetch('./data/building-styles.json')]);
-  if(!mapResponse.ok||!buildingResponse.ok||!detailResponse.ok||!styleResponse.ok) throw new Error('The bundled city could not load. Serve the birdway folder over HTTP.');
-  const map=await mapResponse.json(), buffer=await buildingResponse.arrayBuffer(), dv=new DataView(buffer);
-  let offset=4; const count=dv.getUint32(0,true), buildings=[],cells=new Map();
-  for(let i=0;i<count;i++) {
-    const h=dv.getUint16(offset,true)/10,n=dv.getUint8(offset+2);offset+=3;
-    const rings=[];let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
-    for(let r=0;r<n;r++) {
-      const v=dv.getUint16(offset,true);offset+=2;const ring=[];
-      for(let j=0;j<v;j++) { const x=dv.getInt16(offset,true),z=dv.getInt16(offset+2,true);offset+=4;ring.push([x,z]);x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z); }
-      rings.push(ring);
-    }
-    const b={id:i,h,rings,x0,x1,z0,z1,cx:(x0+x1)/2,cz:(z0+z1)/2};buildings.push(b);
-    for(let x=Math.floor(x0/80);x<=Math.floor(x1/80);x++) for(let z=Math.floor(z0/80);z<=Math.floor(z1/80);z++) {
-      const key=`${x},${z}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(b);
+  const [mapResponse,buildingResponse,detailResponse,styleResponse,jerseyResponse,jerseyBuildings,jerseyDetails]=await Promise.all(['geography.json','buildings.bin','buildings-detail.bin','building-styles.json','jersey-city.json','jersey-city-buildings.bin','jersey-city-detail.bin'].map(name=>fetch('./data/'+name)));
+  if([mapResponse,buildingResponse,detailResponse,styleResponse,jerseyResponse,jerseyBuildings,jerseyDetails].some(response=>!response.ok)) throw new Error('The bundled city could not load. Serve the birdway folder over HTTP.');
+  const map=await mapResponse.json(), buffer=await buildingResponse.arrayBuffer();
+  const buildings=[],cells=new Map();
+  function readBuildings(buffer,region='manhattan') {
+    const dv=new DataView(buffer),baseId=buildings.length,count=dv.getUint32(0,true);let offset=4;
+    for(let i=0;i<count;i++) {
+      const h=dv.getUint16(offset,true)/10,n=dv.getUint8(offset+2);offset+=3;
+      const rings=[];let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
+      for(let r=0;r<n;r++) {
+        const v=dv.getUint16(offset,true);offset+=2;const ring=[];
+        for(let j=0;j<v;j++) { const x=dv.getInt16(offset,true),z=dv.getInt16(offset+2,true);offset+=4;ring.push([x,z]);x0=Math.min(x0,x);x1=Math.max(x1,x);z0=Math.min(z0,z);z1=Math.max(z1,z); }
+        rings.push(ring);
+      }
+      const b={id:baseId+i,region,h,rings,x0,x1,z0,z1,cx:(x0+x1)/2,cz:(z0+z1)/2};buildings.push(b);
+      for(let x=Math.floor(x0/80);x<=Math.floor(x1/80);x++) for(let z=Math.floor(z0/80);z<=Math.floor(z1/80);z++) {
+        const key=`${x},${z}`;if(!cells.has(key))cells.set(key,[]);cells.get(key).push(b);
+      }
     }
   }
+  readBuildings(buffer);
   loadDetails(await detailResponse.arrayBuffer(),buildings);
+  const jersey=await jerseyResponse.json(),jerseyStart=buildings.length;
+  readBuildings(await jerseyBuildings.arrayBuffer(),'jersey-city');
+  loadDetails(await jerseyDetails.arrayBuffer(),buildings,jerseyStart);
+  for(const [id,style] of Object.entries(jersey.styles))buildings[jerseyStart+Number(id)].style=style;
+  map.land.push(...jersey.land);map.streets.push(...jersey.streets);
+  map.regions={manhattan:{buildingCount:jerseyStart},jerseyCity:{buildingCount:jersey.buildingCount,meshCount:jersey.meshCount,bbox:jersey.bbox}};
+  map.buildingCount=buildings.length;
+  map.jerseyCity=jersey;
   const styles=await styleResponse.json();for(const [id,style] of Object.entries(styles))if(buildings[+id])buildings[+id].style=style;
   function buildingAt(x,z) {
     let found=null,foundHeight=-Infinity;

@@ -1,6 +1,6 @@
 # Birdway
 
-A peaceful 3D pigeon game for the browser. Start on a Hudson-side rooftop, spread your wings, and make a small life in Manhattan.
+A peaceful 3D pigeon game for the browser. Start on a Hudson-side rooftop, spread your wings, and make a small life on both sides of the Hudson.
 
 ## Run
 
@@ -17,16 +17,17 @@ The entire repository is a static website. To host it, serve this directory with
 ## What works
 
 - Actual Manhattan building footprints, roof heights, and surveyed roof meshes below an approximate line along 59th Street: **20,868 footprint records**, including **19,666 matched LOD2 roof models** from the 2014 NYC 3D Building Model. The bundled city data also includes **1,152 street centerlines** and OpenStreetMap parks, paths, and tree locations.
+- Downtown Jersey City through **Grove Street**, Hamilton Park, Paulus Hook and Newport: **4,080 building masses**, including **3,141 detailed survey meshes**, **2,181 street lines**, **3,217 paths**, **373 park/plaza polygons**, and **4,707 city inventory trees**. Coastlines retain mapped piers and marina slips. Newer OSM tower parts update sites such as 99 Hudson and Urby; inferred façades use the same materials and distance detail as Manhattan.
 - OpenStreetMap geometry for **7,099 park and plaza polygons**, **22,054 paths**, and **13,504 mapped tree points**. The additional 2015 NYC Street Tree Census provides **23,016 living street-tree records** with species. Up to 10,000 census trees and 2,000 OSM park trees are instanced, with canopy forms selected by species.
 - A CC0 rigged pigeon, about 35 cm long with a roughly 65 cm wingspan, with wingbeat, extended glide, landing flare, tucked-wing idle, brisk walking and pecking animations.
 - Smooth acceleration, banking, climb/descent, faster gliding, trailing camera with a forward view while walking and a downward view during dives, automatic ledge takeoff, forgiving facade collisions, rooftop and street landing, and an animated brisk walking gait. No damage, hunger, lives or timed goals.
 - Day/night cycle (24-minute day), adjustable time and 1–60 minute cycle length, time presets, golden skies, calm water, stars and illuminated windows.
 - Filtered directional tidal river waves, rippled sun highlights, broad olive/blue tidal color bands, mapped shore shading, and actual skyline reflections (512 px, capped at 12 Hz in High). Layered drifting clouds, atmospheric haze and prefiltered sky lighting for glass. CC0 photographic brick, concrete, metal, asphalt, grass and soil materials are bundled locally.
-- Species-shaped branching trees with photographed foliage, textured bark, gentle wind and distance-based detail, plus a trimmed CC0 Poly Haven pine model for close conifers. Park turf uses photographed albedo, normal, roughness and height maps with nearby curved, tapered blades, gentle wind, transmission and distance fading; Battery/BPC paving uses small hexagonal joints. Seawalls follow the mapped shoreline, with railings and furniture near named Esplanade paths. 105 classic elevated water tanks dress verified flat prewar apartment roof patches.
+- Species-shaped branching trees with photographed foliage, textured bark, gentle wind and distance-based detail, plus a trimmed CC0 Poly Haven pine model for close conifers. Park turf uses photographed albedo, normal, roughness and height maps with nearby curved, tapered blades, gentle wind, transmission and distance fading; Battery/BPC paving uses small hexagonal joints. Seawalls follow the mapped shoreline, with railings and furniture near named Esplanade and Hudson waterfront paths. 105 classic elevated water tanks dress verified flat prewar apartment roof patches.
 - Four ferries and two harbor workboats move through the Hudson, East River and harbor, with broken foam wakes. Their looping routes are checked against mapped land.
 - A rooftop nest. Carry food home, peck a snack, bring shiny finds back, decorate the nest, and welcome up to five flock companions. Every two delivered bites invites a friend.
 - **17 neighborhood discoveries:** bagel/pretzel carts, picnic/bakery/café crumbs, shiny keepsakes, fountain bathing, steam updrafts, cooing with a busker and a neighbor, rooftop flowers and laundry perches.
-- **12 landmark postcards**, a field guide with destinations, local minimap, city map, and a direction/distance hint when you choose an outing.
+- **16 landmark postcards**, including Grove Street and three Jersey City destinations, a field guide with destinations, local minimap, city map, and a direction/distance hint when you choose an outing.
 - Photographs with `C`; the last six live in your scrapbook and can be downloaded.
 - Original synthesized ambient music, quiet city air, soft coos, mute and volume controls. Audio begins with your play gesture. No remote audio files or licenses required.
 - Browser-local progress saving, including food, friends, finds, postcards, photographs and time of day. Autosaves, delivery saves, and page-exit saves.
@@ -67,13 +68,13 @@ The implementation targets an M1 MacBook Pro, but no M1 hardware benchmark has b
 
 ## Limits / simplified parts
 
-This is a geographically grounded, stylized game, not photogrammetry. Footprints reflect their source snapshot and are quantized to about one metre. The 2014 roof survey is matched to the newer footprints by location and dimensions; unmatched or newer construction uses its footprint and fallback roof height. PLUTO 2017 year-built and building-class fields guide eight generated façade families, with photographic material maps. Those façades are approximations, not scans, and do not reproduce every setback, material or current construction. One WTC has a footprint-aligned 200-foot base, taper, 417 m roof and 541 m mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. OSM park boundaries, paths, and tree positions are real mapped features, while their rendering, road widths, traffic, people and street props are stylized. Distant neighboring boroughs have land silhouettes, without full building coverage.
+This is a geographically grounded, stylized game, not photogrammetry. Footprints reflect their source snapshot and are quantized to about one metre. The 2014 roof survey is matched to the newer footprints by location and dimensions; unmatched or newer construction uses its footprint and fallback roof height. PLUTO 2017 year-built and building-class fields guide eight generated façade families, with photographic material maps. Those façades are approximations, not scans, and do not reproduce every setback, material or current construction. One WTC has a footprint-aligned 200-foot base, taper, 417 m roof and 541 m mast; landmark crowns, the bridge, the arch and High Line walkway are artistic approximations. OSM park boundaries, paths, and tree positions are real mapped features, while their rendering, road widths, traffic, people and street props are stylized. Downtown Jersey City uses the public 2023 update model supplemented with current OSM geometry; its published date is not a new survey date. Proposed and unfinished OSM towers are excluded. Outside the playable subsets, neighboring shores have land silhouettes without full building coverage.
 
 Boat models and routes are artistic approximations rather than live vessel locations or ferry timetables. Water color and shore shading suggest tidal conditions; they are not measured bathymetry.
 
 Tiny moments are deliberately lightweight: bathing splashes, gardening adds flowers, music answers your coo, and resting gives a quiet pause. Human characters and vehicles follow simple short paths, with no social or traffic simulation. Companion birds follow you; they do not have independent schedules. No interiors, dialogue trees, multiplayer or cloud save.
 
-See [CREDITS.md](CREDITS.md) for map sources, provenance and accuracy. `tools/prepare-map.py` regenerates the footprints, land and streets from its three source inputs; `tools/prepare-detail.py` matches the LOD2 roof survey and PLUTO metadata; `tools/prepare-parks.py` extracts the OpenStreetMap subset; `tools/prepare-street-trees.py` reproduces the census crop. The bundled city data is about 19 MB.
+See [CREDITS.md](CREDITS.md) for map sources, provenance and accuracy. `tools/prepare-map.py` regenerates the footprints, land and streets from its three source inputs; `tools/prepare-detail.py` matches the LOD2 roof survey and PLUTO metadata; `tools/prepare-parks.py` extracts the OpenStreetMap subset; `tools/prepare-street-trees.py` reproduces the census crop. The Jersey City downloader and converter are documented in [notes/JERSEY-CITY-SOURCES.md](notes/JERSEY-CITY-SOURCES.md). The bundled city data is about 23 MB.
 
 ## Code layout and checks
 

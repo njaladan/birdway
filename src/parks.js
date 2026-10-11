@@ -7,11 +7,12 @@ const PATH_COLORS={footway:0xb9b29e,steps:0xb5ad99,cycleway:0xb1ad9c,pedestrian:
 const SURFACE_COLORS={asphalt:0xaaa89b,concrete:0xbcb9a9,paving_stones:0xc4bda9,paved:0xbab5a2,wood:0x9f8c6c,gravel:0xaaa28b,dirt:0x9c927a};
 const chunkKey=(x,z)=>`${Math.floor(x/1600)},${Math.floor(z/1600)}`;
 
-export async function loadParks(){
+export async function loadParks(jersey=null){
  const [, , response, treeResponse]=await Promise.all([loadTrees(),loadGroundTextures(),fetch('./data/parks.json'),fetch('./data/street-trees.json')]);
  if(!response.ok)throw new Error('The park and path data could not load. Serve the birdway folder over HTTP.');
  const data=await response.json();
  if(treeResponse.ok){const census=await treeResponse.json();data.streetTrees=census.trees;data.streetTreeSource=census.source;}
+ if(jersey){data.parks.push(...jersey.parks);data.paths.push(...jersey.paths);data.trees.push(...jersey.trees);data.streetTrees=[...(data.streetTrees||[]),...jersey.streetTrees];}
  return data;
 }
 

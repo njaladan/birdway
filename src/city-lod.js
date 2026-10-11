@@ -35,7 +35,8 @@ export function buildCityLOD(root, map, detailed) {
    for(let i=0;i<ring.length;i++){
     const a=ring[i],d=ring[(i+1)%ring.length],dx=d[0]-a[0],dz=d[1]-a[1],length=Math.hypot(dx,dz);
     if(length<.05)continue;
-    const n=[sign*dz/length,0,-sign*dx/length],a0=[a[0],0,a[1]],a1=[a[0],b.h,a[1]],d0=[d[0],0,d[1]],d1=[d[0],b.h,d[1]];
+    const base=b.style?.baseHeight||0;
+    const n=[sign*dz/length,0,-sign*dx/length],a0=[a[0],base,a[1]],a1=[a[0],b.h,a[1]],d0=[d[0],base,d[1]],d1=[d[0],b.h,d[1]];
     for(const p of sign>0?[a0,d1,d0,a0,a1,d1]:[a0,d0,d1,a0,d1,a1])put(p,n);
    }
   }

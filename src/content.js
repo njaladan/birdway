@@ -11,6 +11,10 @@ export const LANDMARKS=[
  {id:'flatiron',name:'Flatiron Building',lon:-73.9896,lat:40.7411,description:'A little wedge of Manhattan, pointed into the breeze.',kind:'wedge'},
  {id:'empire',name:'Empire State Building',lon:-73.9857,lat:40.7484,description:'Climb above the avenues and let the whole city breathe.',kind:'tower'},
  {id:'bryant',name:'Bryant Park',lon:-73.9832,lat:40.7536,description:'Chairs in the shade. A crumb beneath every table.',kind:'park'},
+ {id:'grove',name:'Grove Street & Newark Avenue',lon:-74.0432,lat:40.7195,description:'A pedestrian plaza, a passing conversation, a little room to wander.',kind:'harbor'},
+ {id:'exchange',name:'Exchange Place',lon:-74.0335,lat:40.7161,description:'The Hudson opens wide, with Manhattan shining on the other shore.',kind:'glass'},
+ {id:'hamilton',name:'Hamilton Park',lon:-74.0444,lat:40.7279,description:'Tree-lined paths and a quiet square among the brownstones.',kind:'park'},
+ {id:'newport',name:'Newport Green',lon:-74.0325,lat:40.7354,description:'A little green beside the river, with the skyline for company.',kind:'park'},
 ];
 export const MOMENTS=[
  {id:'cart',type:'food',name:'A bagel for the road',lon:-74.0161,lat:40.7140,detail:'Pick up a fallen sesame bite. E to carry; P to peck.',item:'sesame bagel',prop:'vendor'},

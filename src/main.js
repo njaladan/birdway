@@ -25,8 +25,8 @@ async function boot(){
   renderer.setPixelRatio(Math.min(devicePixelRatio,touchDevice?1:1.25));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.userData={waterReflections:false};
   renderer.shadowMap.enabled=!touchDevice;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,16000);sky=makeSky(scene);environment=makeEnvironment(renderer,scene,sky);
-  $('loading-progress').style.width='10%';map=await loadGeography();sky.setGeography(map.land);boats=makeBoats(scene,map);await loadBirdModel();$('loading-note').textContent='Opening 20,868 windows onto Manhattan…';
-  const [parkData]=await Promise.all([loadParks(),loadFacadeTextures()]);
+  $('loading-progress').style.width='10%';map=await loadGeography();sky.setGeography(map.land);boats=makeBoats(scene,map);await loadBirdModel();$('loading-note').textContent=`Opening ${map.buildings.length.toLocaleString()} rooftops across the Hudson…`;
+  const [parkData]=await Promise.all([loadParks(map.jerseyCity),loadFacadeTextures()]);
   city=await buildCity(scene,map,p=>$('loading-progress').style.width=`${15+p*65}%`);
   city.root.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.userData.distant)o.castShadow=false;else if(o.material.depthWrite!==false)o.castShadow=true;}});
   waterfront=buildWaterfront(scene,map,parkData);

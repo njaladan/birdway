@@ -19,12 +19,12 @@ function flatPolygon(rings,y,color,parent) {
 }
 export async function buildCity(scene,map,progress) {
  const root=new THREE.Group();scene.add(root);
- for(const p of map.land)flatPolygon(p.rings,0,p.name==='Manhattan'?0xaaa89a:0x8e9e91,root);
+ for(const p of map.land)flatPolygon(p.rings,0,['Manhattan','Jersey City'].includes(p.name)?0xaaa89a:0x8e9e91,root);
  // Actual centerlines, with a sidewalk strip and roadbed. All geometries share one buffer.
  const roadPositions=[],curbPositions=[],stripePositions=[];
  function roadStrip(array,a,b,width,y){const dx=b[0]-a[0],dz=b[1]-a[1],l=Math.hypot(dx,dz);if(l<.01)return;const nx=-dz/l*width/2,nz=dx/l*width/2;const v=[[a[0]+nx,y,a[1]+nz],[a[0]-nx,y,a[1]-nz],[b[0]+nx,y,b[1]+nz],[b[0]-nx,y,b[1]-nz]];for(const i of [0,2,1,1,2,3])array.push(...v[i]);}
  for(const street of map.streets)for(let i=1;i<street.points.length;i++) {
-  const a=street.points[i-1],b=street.points[i];const wide=/Broadway|West St|F D R|[Aa]ve/.test(street.name)?17:10;
+  const a=street.points[i-1],b=street.points[i];const wide=street.width||(/Broadway|West St|F D R|[Aa]ve/.test(street.name)?17:10);
   roadStrip(curbPositions,a,b,wide+7,.01);roadStrip(roadPositions,a,b,wide,.025);
   if(wide>12)roadStrip(stripePositions,a,b,.16,.035);
  }
@@ -64,7 +64,8 @@ export async function buildCity(scene,map,progress) {
   for(const ring of b.rings)for(let i=0;i<ring.length;i++) {
    const a=ring[i],d=ring[(i+1)%ring.length],dx=d[0]-a[0],dz=d[1]-a[1],l=Math.hypot(dx,dz);if(!l)continue;
    const area=ring.reduce((sum,p,j)=>{const q=ring[(j+1)%ring.length];return sum+p[0]*q[1]-q[0]*p[1];},0);
-   const sign=area>0?1:-1, a0=[a[0],0,a[1],0,0],a1=[a[0],b.h,a[1],0,b.h/3.3],d0=[d[0],0,d[1],l/3,0],d1=[d[0],b.h,d[1],l/3,b.h/3.3];
+   const base=b.style?.baseHeight||0;
+   const sign=area>0?1:-1, a0=[a[0],base,a[1],0,base/3.3],a1=[a[0],b.h,a[1],0,b.h/3.3],d0=[d[0],base,d[1],l/3,base/3.3],d1=[d[0],b.h,d[1],l/3,b.h/3.3];
    const order=sign>0?[a0,d1,d0,a0,a1,d1]:[a0,d0,d1,a0,d1,a1];
    for(const [x,y,z,u,v] of order)push(x,y,z,sign*dz/l,0,-sign*dx/l,u,v);
   }

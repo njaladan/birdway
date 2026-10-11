@@ -19,6 +19,10 @@ function stable(n) {
 }
 
 export function facadeStyle(b) {
+  if(Number.isInteger(b.style?.kind)&&b.style.kind>=0&&b.style.kind<7){
+    const kind=b.style.kind,choices=palettes[kind];
+    return {kind,color:new THREE.Color(choices[Math.floor(stable(b.id)*choices.length)])};
+  }
   const rawYear = Number(b.style?.year);
   const year = rawYear > 0 ? rawYear : 1950;
   const cls = String(b.style?.class || '');

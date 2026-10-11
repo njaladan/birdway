@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFile,readdir} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import * as THREE from '../vendor/three.module.js';
-import {loadGeography} from '../src/geography.js';
+import {loadGeography,geo} from '../src/geography.js';
 import {makeBird,loadBirdModel} from '../src/bird.js';
 import {Flight,BIRD_CLEARANCE,FLIGHT} from '../src/flight.js';
 import {CityLife} from '../src/life.js';
@@ -16,7 +16,9 @@ const diskFetch=async path=>new Response(await readFile(new URL(path,root)));
 globalThis.fetch=diskFetch;
 const storage=new Map();globalThis.localStorage={getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)};
 await loadBirdModel();
-const map=await loadGeography();assert.equal(map.buildings.length,20868);assert.equal(map.streets.length,1152);
+const map=await loadGeography();assert.equal(map.regions.manhattan.buildingCount,20868);assert.equal(map.buildings.length,20868+map.regions.jerseyCity.buildingCount);assert.ok(map.streets.length>1152);
+for(const [lon,lat]of [[-74.043,40.719],[-74.0444,40.7279]]){const p=geo(lon,lat);assert.ok(map.onLand(p.x,p.z),'Grove Street and Hamilton Park remain playable land');}
+const river=geo(-74.023,40.719),hudson99=geo(-74.0348,40.71535);assert.equal(map.onLand(river.x,river.z),false,'the addition preserves the Hudson channel');assert.ok(Math.abs(map.surface(hudson99.x,hudson99.z)-274.32)<.2,'99 Hudson uses its mapped tower part and published height');
 const home=map.buildings.find(b=>b.h>50&&b.h<90&&map.buildingAt(b.cx,b.cz)?.id===b.id);
 const nest=new THREE.Vector3(home.cx,map.surface(home.cx,home.cz)+BIRD_CLEARANCE,home.cz),camera=new THREE.PerspectiveCamera(),bird=makeBird(),flight=new Flight(bird,camera,map,nest);
 flight.update(1/60);assert.equal(flight.flying,false);assert.ok(Math.abs(flight.position.y-nest.y)<.01);
@@ -31,7 +33,7 @@ diveFlight.keys.add('ShiftLeft');for(let i=0;i<110;i++)diveFlight.update(1/60);d
 assert.ok(Math.abs(diveFlight.position.clone().project(diveCamera).y)<.35,'The diving pigeon remains near screen center');
 assert.ok(diveCamera.getWorldDirection(new THREE.Vector3()).y<-.8,'A steep dive reveals the ground');
 
-const parkData=await loadParks();
+const parkData=await loadParks(map.jerseyCity);
 const audio={coo(){},enabled:false},life=new CityLife(new THREE.Scene(),map,flight,nest,audio,()=>{},parkData);
 const food=life.moments.find(m=>m.type==='food');assert.equal(map.surface(food.position.x,food.position.z),0,'Food is accessible at street level');
 flight.position.copy(food.position).y+=BIRD_CLEARANCE;flight.flying=false;life.update(.01);life.interact();assert.equal(life.save.carried?.type,'food');flight.home();life.interact();assert.equal(life.save.food,1);assert.equal(life.save.carried,null);

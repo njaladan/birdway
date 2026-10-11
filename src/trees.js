@@ -1,8 +1,8 @@
 import * as THREE from '../vendor/three.module.js';
 import { GLTFLoader } from '../vendor/GLTFLoader.js';
 
-// Manhattan street trees are represented as branching, instanced trees rather
-// than repeated crown primitives. Templates keep the 4k point budget affordable.
+// Mapped street trees are represented as branching, instanced trees rather
+// than repeated crown primitives. Templates keep the sampled point budget affordable.
 const CHUNK = 420;
 const MAX_TREES = 12000;
 const MAX_CENSUS_TREES = 10000;
@@ -416,7 +416,7 @@ export function buildTrees(scene, data) {
   farLeafMaterial.map = treeTextures.leaves[1];
   farLeafMaterial.alphaTest = .36;
   const root = new THREE.Group();
-  root.name = 'NYC census and park trees';
+  root.name = 'City inventory and park trees';
   scene.add(root);
   const records = [];
 
