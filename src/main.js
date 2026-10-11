@@ -14,6 +14,7 @@ import {loadFacadeTextures} from './facades.js';
 import {buildWaterfront} from './waterfront.js';
 import {makeBoats} from './boats.js';
 import {loadTraffic,TrafficWorld} from './traffic.js';
+import {roadWidth} from './traffic-network.js';
 const $=id=>document.getElementById(id);
 const touchDevice=matchMedia('(any-pointer: coarse)').matches||navigator.maxTouchPoints>0;
 let touchEnabled=touchDevice;
@@ -29,7 +30,7 @@ async function boot(){
   $('loading-progress').style.width='10%';map=await loadGeography();sky.setGeography(map.land);boats=makeBoats(scene,map);await loadBirdModel();$('loading-note').textContent=`Opening ${map.buildings.length.toLocaleString()} rooftops across the Hudson…`;
   const [parkData,trafficBundle]=await Promise.all([loadParks(map.jerseyCity),loadTraffic(),loadFacadeTextures()]);
   // Current directed OSM roads also supply the asphalt under the traffic graph.
-  map.streets=[...trafficBundle.data.roads.map(r=>({name:r.name,points:r.points,width:Math.min(17,Math.max(7,r.lanes*3.2))})),...map.jerseyCity.streets];
+  map.streets=[...trafficBundle.data.roads.map(r=>({name:r.name,points:r.points,width:roadWidth(r)})),...map.jerseyCity.streets];
   city=await buildCity(scene,map,p=>$('loading-progress').style.width=`${15+p*65}%`);
   city.root.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.userData.distant)o.castShadow=false;else if(o.material.depthWrite!==false)o.castShadow=true;}});
   waterfront=buildWaterfront(scene,map,parkData);

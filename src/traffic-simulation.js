@@ -1,9 +1,11 @@
 import {VEHICLES} from './vehicles.js';
-import {buildNetwork,makePath,samplePath,projectPath,random,angleDifference,streetAxis,signalState,choices} from './traffic-network.js';
+import {TrafficPopulation} from './traffic-population.js';
+import {buildNetwork,makePath,samplePath,projectPath,random,angleDifference,streetAxis,signalState,choices,roadWidth} from './traffic-network.js';
 
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 export class TrafficSimulation {
- constructor(data,profile,map,{carCount=1100,busScale=.55,parkedCount=220}={}){
+ constructor(data,profile,map,options={}){
+  const {carCount=0,busScale=1,parkedCount=0,localDensity=options.carCount===undefined&&options.parkedCount===undefined}=options;
   this.data=data;this.profile=profile;this.map=map;this.network=buildNetwork(data);this.time=0;this.hours=17.55;this.day='weekday';this.actors=[];this.serial=0;this.busScale=busScale;this.cells=new Map();
   this.roads=this.network.edges.filter(e=>e.path.length>35&&!e.road.busOnly);
   this.routes=data.busRoutes.map(route=>{
@@ -14,7 +16,7 @@ export class TrafficSimulation {
   });
   for(let i=0;i<carCount;i++){const actor=this.makeActor(this.chooseType(i),i);this.actors.push(actor);this.spawnCar(actor,true);}
   for(let i=0;i<parkedCount;i++){const actor=this.makeActor(i%7===0?'van':i%3?'sedan':'suv',i+9000);actor.parked=true;this.actors.push(actor);this.spawnCar(actor,true);actor.lane=this.parkingLane(actor.edge);this.pose(actor);if(this.map.buildingAt(actor.x,actor.z))actor.active=false;}
-  this.setClock(this.hours,this.day,true);this.rebuildCells();
+  this.setClock(this.hours,this.day,true);this.rebuildCells();this.population=localDensity?new TrafficPopulation(this):null;
  }
  available(a){
   if(a.type==='schoolBus')return this.day==='weekday'&&(this.hours>=6&&this.hours<10||this.hours>=13&&this.hours<18);
@@ -27,8 +29,8 @@ export class TrafficSimulation {
   for(const [type,weight] of Object.entries(weights)){roll-=weight;if(roll<=0)return type;}return 'sedan';
  }
  makeActor(type,seed){return {id:++this.serial,type,spec:VEHICLES[type],seed,active:true,parked:false,bus:false,speed:0,distance:0,lane:1.55,x:0,z:0,heading:0,previousX:0,previousZ:0,previousHeading:0,braking:false,indicator:0,doors:0,dwell:0,stopIndex:0,tripDistance:0,pickupAt:800+random(seed+43)*1400,terminal:false,rider:false,age:0,root:null};}
- parkingLane(edge){return edge.road.oneway?Math.max(3.6,edge.road.lanes*1.55+.65):Math.max(3.6,edge.road.lanes*1.55+.65);}
- laneFor(edge,actor){return edge.road.oneway?(actor.bus||['van','boxTruck','sanitation'].includes(actor.type)?Math.max(0,(edge.road.lanes-1)*1.5):edge.road.lanes>1?(random(actor.seed+edge.id)>.5?1.5:-1.5):0):1.6;}
+ parkingLane(edge){return roadWidth(edge.road)/2-1.1;}
+ laneFor(edge,actor){if(this.population){const lanes=this.population.lanes(edge);return lanes[Math.floor(random(actor.seed+edge.id)*lanes.length)];}return edge.road.oneway?(actor.bus||['van','boxTruck','sanitation'].includes(actor.type)?Math.max(0,(edge.road.lanes-1)*1.5):edge.road.lanes>1?(random(actor.seed+edge.id)>.5?1.5:-1.5):0):1.6;}
  spawnCar(actor,initial=false){
   for(let attempt=0;attempt<40;attempt++){
    const edge=this.roads[Math.floor(random(actor.seed+actor.id*31+attempt*7+Math.floor(this.time))*this.roads.length)];
@@ -46,8 +48,8 @@ export class TrafficSimulation {
   if(hour===this.clockHour&&day===this.clockDay&&!initial)return;this.clockHour=hour;this.clockDay=day;
   for(const route of this.routes){
    const frequency=route.hourly[day]?.[hour]||0;
-   // Scheduled buses/hour × in-crop scheduled duration, scaled for a sparse playable city.
-   route.target=clamp(Math.round(frequency*route.duration/3600*this.busScale),frequency?1:0,5);
+   // Scheduled buses/hour × in-crop scheduled duration; default uses the full estimate.
+   route.target=clamp(Math.round(frequency*route.duration/3600*this.busScale),frequency?1:0,8);
    while(route.actors.length<route.target){
     const a=this.makeActor(route.articulated?'articulated':'bus',this.serial+400);a.bus=true;a.route=route;a.path=route.path;a.distance=route.path.length*random(a.seed+11);a.lane=2.3;
     a.speed=4;
@@ -109,10 +111,10 @@ export class TrafficSimulation {
  tickActor(a,dt){
   if(!a.active||a.parked)return;
   a.age+=dt;a.lastStep=dt;a.previousX=a.x;a.previousZ=a.z;a.previousHeading=a.heading;
-  const far=!this.focus||Math.hypot(a.x-this.focus.x,a.z-this.focus.z)>600;
-  if(!a.bus&&!a.parked&&far&&!a.rider&&(!this.available(a)||random(a.seed+99)>this.profile.hourlyDemand[Math.floor(this.hours)])){a.active=false;return;}
+  const far=!this.focus||Math.hypot(a.x-this.focus.x,a.z-this.focus.z)>660;
+  if(!a.bus&&!a.parked&&far&&!a.rider&&(!this.available(a)||!a.local&&random(a.seed+99)>this.profile.hourlyDemand[Math.floor(this.hours)])){a.active=false;return;}
   if(a.bus&&a.route.actors.indexOf(a)>=a.route.target&&far&&!a.rider){a.active=false;return;}
-  if(a.terminal){a.speed=0;if(far&&!a.rider){if(a.bus){a.distance=0;a.stopIndex=0;a.terminal=false;a.active=a.route.actors.indexOf(a)<a.route.target;this.pose(a);}else this.spawnCar(a);}return;}
+  if(a.terminal){a.speed=0;if(far&&!a.rider){if(a.bus){a.distance=0;a.stopIndex=0;a.terminal=false;a.active=false;this.pose(a);}else if(a.local)a.active=false;else this.spawnCar(a);}return;}
   if(a.dwell>0){a.dwell=Math.max(0,a.dwell-dt);a.speed=0;a.braking=true;a.doors=a.bus?Math.min(1,a.doors+dt*2):0;return;}
   a.doors=Math.max(0,a.doors-dt*2);
   if(a.pickupPending&&a.pickupPending.edge!==a.edge)a.pickupPending=null;
@@ -158,14 +160,14 @@ export class TrafficSimulation {
 
  }
  step(dt,focus=this.focus){
-  this.focus=focus;dt=clamp(dt,0,.05);if(dt===0)return;this.time+=dt;
+  this.focus=focus;this.population?.refresh(focus);dt=clamp(dt,0,.05);if(dt===0)return;this.time+=dt;
   for(const c of this.network.controllers)if(c.owner&&(!c.owner.active||Math.hypot(c.owner.x-c.x,c.owner.z-c.z)>26+c.owner.spec.length/2)){if(c.owner.committedControl===c)c.owner.committedControl=null;c.owner=null;}
   this.rebuildCells();for(const a of this.actors)this.tickActor(a,dt);
   if(Math.floor(this.time/3)!==this.spawnTick){
    this.spawnTick=Math.floor(this.time/3);
    for(const a of this.actors)if(!a.active&&!a.parked){
-    if(a.bus){if(a.route.actors.indexOf(a)<a.route.target&&(!focus||Math.hypot(a.route.points[0][0]-focus.x,a.route.points[0][1]-focus.z)>350)){a.distance=0;a.active=true;a.terminal=false;a.stopIndex=0;this.pose(a);}}
-    else if(this.available(a)&&random(a.seed+99)<=this.profile.hourlyDemand[Math.floor(this.hours)])this.spawnCar(a);
+    if(a.bus){if(a.route.actors.indexOf(a)<a.route.target&&(!focus||Math.hypot(a.route.points[0][0]-focus.x,a.route.points[0][1]-focus.z)>660)){const p=samplePath(a.route.path,0,a.lane);if(this.population&&!this.population.clear(p,a))continue;a.distance=0;a.active=true;a.terminal=false;a.stopIndex=0;a.speed=0;this.pose(a);this.population?.addCell(a);}}
+    else if(!a.local&&this.available(a)&&random(a.seed+99)<=this.profile.hourlyDemand[Math.floor(this.hours)])this.spawnCar(a);
    }
   }
  }

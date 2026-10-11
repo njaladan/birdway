@@ -1,5 +1,7 @@
 // Directed street graph and pure timing/path helpers, shared by simulation and regressions.
 export const TAU=Math.PI*2;
+// OSM lane counts describe travel lanes; inferred curb bays need their own width.
+export const roadWidth=road=>Math.min(21,Math.max(7,road.lanes*3.05+(road.kind==='primary'||road.busOnly?0:4.4)));
 export const random=seed=>{const v=Math.sin(seed*127.1+311.7)*43758.5453;return v-Math.floor(v);};
 export const angleDifference=(a,b)=>Math.atan2(Math.sin(a-b),Math.cos(a-b));
 export function makePath(points){

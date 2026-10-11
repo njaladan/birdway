@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import * as THREE from '../vendor/three.module.js';
-import {buildNetwork,signalState,streetAxis,makePath,samplePath} from '../src/traffic-network.js';
+import {buildNetwork,signalState,streetAxis,makePath,samplePath,roadWidth} from '../src/traffic-network.js';
 import {TrafficSimulation} from '../src/traffic-simulation.js';
 import {TrafficWorld} from '../src/traffic.js';
 import {Flight,BIRD_CLEARANCE} from '../src/flight.js';
@@ -40,3 +40,37 @@ flight.update(1/60);assert.ok(Math.abs(flight.position.y-3.3-BIRD_CLEARANCE)<.01
 flight.position.set(0,3.3+BIRD_CLEARANCE,0);moving.x=0;moving.heading=0;flight.vehicleSupport=moving;flight.flying=false;flight.keys.add('KeyW');flight.heading=-Math.PI/2;for(let i=0;i<60;i++)flight.update(1/60);assert.ok(flight.flying,'Walking off a vehicle roof takes flight');
 const pauseSim=new TrafficSimulation(synthetic,profile,map,{carCount:4,parkedCount:0}),old=pauseSim.actors.map(a=>[a.x,a.z]);pauseSim.step(0,{x:0,z:0});assert.deepEqual(pauseSim.actors.map(a=>[a.x,a.z]),old);
 console.log(`Traffic checks passed: ${net.edges.length} directed edges, ${net.controllers.length} controllers, 58 bus paths, observed demand, signal clearance, red queues, connected travel, bus doors/stops, moving roof landing/riding/takeoff, terminal safety and pause.`);
+
+// Local population follows the bird instead of diluting a fixed fleet over Manhattan.
+const local=new TrafficSimulation(data,profile,map);local.setClock(16,'weekday');local.step(0,{x:0,z:0});
+const within=(sim,r,parked)=>sim.actors.filter(a=>a.active&&!a.bus&&a.parked===parked&&Math.hypot(a.x,a.z)<r).length;
+assert.ok(within(local,300,false)>100,'Busy blocks have a substantial moving population');
+assert.ok(within(local,300,true)>200,'Curbs are populated around the bird');
+for(const a of local.actors.filter(a=>a.parked)){
+ assert.ok(Math.abs(a.lane)+a.spec.width/2<=roadWidth(a.edge.road)/2,'Parked vehicles fit within the inferred asphalt curb bays');
+ assert.ok(a.distance>=20&&a.distance<=a.edge.path.length-20,'Parking leaves intersection approaches clear');
+ assert.equal(local.population.nearStop(a.x,a.z),false,'Parking leaves mapped bus-stop areas clear');
+ assert.ok(!a.edge.road.busLane||a.lane<0,'Parking does not occupy the inferred right bus lane');
+}
+const night=new TrafficSimulation(data,profile,map);night.setClock(3,'weekday');night.step(0,{x:0,z:0});
+assert.ok(within(night,300,false)<within(local,300,false)*.4,'Overnight local occupancy follows the observed DOT demand drop');
+const residents=new Set(local.actors);local.step(0,{x:120,z:0});
+for(const a of local.actors)if(!residents.has(a)&&a.local)assert.ok(Math.hypot(a.x-120,a.z)>=660,'New residents appear outside the visible circle during ordinary travel');
+const rider=local.actors.find(a=>a.local&&!a.parked);rider.rider=true;const riderPose=[rider.x,rider.z];
+local.step(0,{x:10000,z:10000});assert.ok(local.actors.includes(rider),'Streaming preserves a ridden vehicle');assert.deepEqual([rider.x,rider.z],riderPose,'Streaming cannot teleport the rider');rider.rider=false;
+for(const focus of [{x:0,z:0},{x:1200,z:-1000},{x:-900,z:900},{x:800,z:-2500},{x:0,z:0}]){
+ local.step(0,focus);assert.ok(local.actors.filter(a=>a.local&&!a.parked).length<=local.population.maxMoving);assert.ok(local.actors.filter(a=>a.parked).length<=local.population.maxParked);
+}
+const manyScene=new THREE.Scene(),stubFlight={vehicleSupport:null},manyWorld=new TrafficWorld(manyScene,map,stubFlight,{data,profile});
+manyWorld.update(0,{x:0,z:0},0,16,'weekday');
+assert.ok(manyWorld.snapshot().visible>1000,'Dense local traffic is submitted to the scene');
+assert.ok(manyWorld.detailed.size<=32,'Detailed vehicles have a fixed rendering budget');
+assert.ok([...manyWorld.batches.values()].filter(m=>m.count>0).length<=Object.keys(VEHICLES).length,'Distant vehicles use at most one batch per class');
+const simplified=manyWorld.nearby.find(a=>!a.root&&!a.bus);assert.ok(simplified,'Some close vehicles still use a batch at the detail budget');assert.ok(manyWorld.roofAt(simplified,simplified.x,simplified.z)>0,'Batched vehicles retain roof collision/perch support');
+const farResidents=manyWorld.sim.actors.filter(a=>a.local&&!a.parked&&Math.hypot(a.x,a.z)>660);manyWorld.sim.setClock(3,'weekday');manyWorld.sim.step(0,{x:0,z:0});assert.ok(farResidents.some(a=>!a.active),'Falling hourly demand thins traffic outside the visible circle');
+manyWorld.update(0,{x:0,z:0},0,16,'weekday');
+const beforePause=manyWorld.sim.actors.map(a=>[a.id,a.x,a.z]);manyWorld.update(0,{x:0,z:0},0,16,'weekday');assert.deepEqual(manyWorld.sim.actors.map(a=>[a.id,a.x,a.z]),beforePause,'Dense traffic remains still when paused');
+for(const focus of [{x:1200,z:-1000},{x:-900,z:900},{x:800,z:-2500},{x:0,z:0}]){
+ manyWorld.update(0,focus,0,16,'weekday');assert.ok(manyWorld.detailed.size<=32);assert.ok([...manyWorld.vehiclePool.values()].reduce((n,pool)=>n+pool.length,0)<=64,'Detailed vehicle cache stays bounded after travelling');
+}
+console.log(`Density checks passed: ${within(local,300,false)} moving / ${within(local,300,true)} parked within 300 m, quieter overnight, clear bus stops, offscreen spawning, bounded streaming/detail, batched roof perches and pause.`);

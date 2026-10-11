@@ -117,7 +117,7 @@ function display(route,headsign){
  const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;const mat=new THREE.MeshBasicMaterial({map:texture,toneMapped:false});displays.set(key,mat);return mat;
 }
 export function makeVehicle(type,seed=0,route=null){
- const d=VEHICLES[type],base=template(type,seed%colors.length),root=base.group.clone();
+ const d=VEHICLES[type],base=template(type,Math.abs(Math.trunc(seed))%colors.length),root=base.group.clone();
  root.userData.wheelRoll={value:0};
  for(const mesh of root.children)if(mesh.geometry?.attributes.wheelPart&&['rubber','metal'].includes(mesh.name)){mesh.material=mesh.material.clone();mesh.material.onBeforeCompile=shader=>{shader.uniforms.wheelRoll=root.userData.wheelRoll;shader.vertexShader='uniform float wheelRoll; attribute vec3 wheelCenter; attribute float wheelPart;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>','#include <beginnormal_vertex>\nif(wheelPart>.5){float c=cos(wheelRoll),s=sin(wheelRoll);objectNormal.yz=mat2(c,s,-s,c)*objectNormal.yz;}').replace('#include <begin_vertex>','#include <begin_vertex>\nif(wheelPart>.5){float c=cos(wheelRoll),s=sin(wheelRoll);vec3 p=transformed-wheelCenter;p.yz=mat2(c,s,-s,c)*p.yz;transformed=wheelCenter+p;}');};mesh.material.customProgramCacheKey=()=> 'rolling-vehicle-wheels';}
  root.userData.type=type;root.userData.spec=d;
@@ -134,7 +134,7 @@ export function makeVehicle(type,seed=0,route=null){
 }
 export function updateVehicleVisual(root,speed,braking,indicator,night,time,doors=0,distance=0,travel=0){
  root.userData.wheelRoll.value=-travel/root.userData.spec.wheel;
- const close=distance<170;
+ const close=distance<100;
  for(const child of root.children){
   child.visible=child.name==='distant'?!close:close;
   if(child.name==='door')child.position.z=child.userData.closedZ+child.userData.direction*.42*doors;
@@ -143,4 +143,30 @@ export function updateVehicleVisual(root,speed,braking,indicator,night,time,door
  if(front)front.material.emissiveIntensity=.06+night*1.8;
  if(rear)rear.material.emissiveIntensity=braking?2:.05+night*.5;
  for(const [name,direction] of [['amberLeft',1],['amberRight',-1]]){const turn=root.getObjectByName(name);if(turn)turn.material.emissiveIntensity=indicator===direction&&Math.sin(time*9)>0?2:0;}
+}
+
+// Shared textured silhouettes: all distant instances of a class use one draw call.
+export function makeVehicleBatch(type,capacity=4096){
+ const d=VEHICLES[type],parts=[];
+ function box(x,y,z,w,h,l,tile,color,paint=false){
+  const g=mapped(new THREE.BoxGeometry(w,h,l),tile);g.translate(x,y,z);
+  const c=new THREE.Color(color),count=g.attributes.position.count,colors=[],flags=[];
+  for(let i=0;i<count;i++){colors.push(c.r,c.g,c.b);flags.push(paint?1:0);}
+  g.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));g.setAttribute('bodyPaint',new THREE.Float32BufferAttribute(flags,1));parts.push(g);
+ }
+ const car=['sedan','suv','taxi','taxiVan','rideshare','police'].includes(type),bus=['bus','articulated'].includes(type);
+ if(car){box(0,.67,0,d.width,.75,d.length,d.tile||0,0xffffff,true);box(0,(d.height+.95)/2,d.roofZ,d.width-.18,d.height-.95,d.roofLength,7,0xc1d6df);box(0,d.height-.04,d.roofZ,d.width-.18,.08,d.roofLength,0,0xffffff,true);}
+ else {box(0,(d.height+.5)/2,0,d.width,d.height-.5,d.length,d.tile||0,0xffffff,!d.tile);if(bus){for(const x of [-1,1])box(x*(d.width/2+.01),2.2,0,.025,1,d.length-.9,7,0xb5cbd6);box(0,2.18,-d.length/2-.02,d.width-.22,1.25,.03,7,0xb5cbd6);}else box(0,2.02,-d.length/2+.9,d.width-.18,.75,1.4,7,0xb5cbd6);}
+ for(const z of [-d.length*.3,d.length*.31])for(const x of [-1,1])box(x*(d.width/2-.08),d.wheel+.04,z,.22,d.wheel*1.8,d.wheel*1.8,1,0x6b6b6b);
+ for(const x of [-1,1]){box(x*d.width*.36,.95,-d.length/2-.035,d.width*.18,.18,.04,0,0xffefd1);box(x*d.width*.36,.92,d.length/2+.035,d.width*.12,.22,.04,0,0xe5573c);}
+ const geometry=mergeGeometries(parts);for(const g of parts)g.dispose();
+ const material=new THREE.MeshStandardMaterial({map:atlas,vertexColors:true,roughness:.72,metalness:.12});
+ material.onBeforeCompile=shader=>{shader.vertexShader='attribute float bodyPaint;\n'+shader.vertexShader;shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>','#include <color_vertex>\n#ifdef USE_INSTANCING_COLOR\nif(bodyPaint<.5) vColor.rgb = color;\n#endif');};material.customProgramCacheKey=()=> 'batched-vehicle-paint';
+ const mesh=new THREE.InstancedMesh(geometry,material,capacity);mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);mesh.frustumCulled=false;mesh.count=0;return mesh;
+}
+export function vehicleColor(type,seed){return type==='taxi'||type==='taxiVan'?0xeeb929:type==='fire'?0xc94b3e:colors[Math.abs(Math.trunc(seed))%colors.length];}
+export function vehicleRoofTriangles(type,seed){return template(type,Math.abs(Math.trunc(seed))%colors.length).group.userData.roofTriangles;}
+export function disposeVehicle(root){
+ for(const mesh of root.children){if(['white','red','amberLeft','amberRight','rubber','metal'].includes(mesh.name))mesh.material.dispose();if(['door','routeDisplay'].includes(mesh.name))mesh.geometry.dispose();}
+ root.removeFromParent();
 }

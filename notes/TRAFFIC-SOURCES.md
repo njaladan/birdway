@@ -40,6 +40,18 @@ Each hour contains 1,684–1,688 observed count intervals; mean interval volume 
 
 Rebuild: `python tools/prepare-traffic.py roads.json signals.json gtfs_m.zip`. The Python standard library is sufficient. `data/traffic-profile.json` records the raw aggregate observations alongside the normalized demand curve and clearly marked estimated weights.
 
+## Local density and rendering
+
+The fleet now streams around the bird instead of distributing 1,100 moving slots and 220 parked vehicles across the entire Manhattan crop. Peak moving occupancy targets roughly one vehicle per **32 metres per travel lane on primary/secondary/tertiary streets**, and one per **58 metres on quieter streets**, multiplied by DOT's observed hourly demand curve. Actual counts vary with the local road network, building masks, available vehicle classes, queues, and population budgets. These spacing targets are **artistic estimates for an NYC street feel**, not an inference of instantaneous occupancy from DOT flow counts. No exact measured block density is claimed.
+
+Inferred curb parking uses 7.2-metre bays with 78% target occupancy; placement leaves 20 metres at both ends of each graph edge and 24 metres around mapped bus-stop points. Primary roads, bus-only streets and the inferred right curb of bus-lane streets are excluded. Road widths add inferred curb bays to mapped travel lanes so parked cars fit on asphalt. These are scenery rules, not a current parking regulation, hydrant, bicycle-lane, loading-zone or parking utilization survey.
+
+Moving traffic streams over a 900-metre ring and parking over 720 metres, capped at 1,000 moving non-transit vehicles and 2,600 parked vehicles. Existing residents persist into a wider ring. Ordinary travel replenishes actors outside 660 metres; rendering ends at 620 metres. Newly visited areas load immediately on initial entry or a large location jump. Visible/ridden actors are protected when demand falls; reduced demand thins the offscreen population first. Ridden actors survive streaming and cannot be recycled underneath the bird. The population remains confined to the mapped Manhattan road graph.
+
+Bus population uses scheduled hourly departures multiplied by in-crop scheduled travel time at **full scale**, capped at eight buses per directed representative route (previously 55% scale with a cap of five). This remains an estimate of concurrent service, with generated dispatch, not live locations or full timetable simulation. Safe terminal dispatch leaves room for the preceding vehicle.
+
+At most 32 close vehicles retain detailed meshes, with a 64-model reuse cache. All other visible vehicles use textured, instanced silhouettes (body, glass, tires and lights), one draw call per class. Simplified rendering retains roof/perch collision support. Performance was checked in headless Chromium with software WebGL; it is not an M1 hardware benchmark.
+
 ## Vehicles
 
 Kenney's [Car Kit](https://kenney.nl/assets/car-kit), downloaded from `https://kenney.nl/media/pages/assets/car-kit/1a312ec241-1775131960/kenney_car-kit.zip`, is **CC0**. Selected GLB models, their color texture and the source license are bundled in `assets/vehicles/kenney/`. Browser adaptations scale the geometry to plausible metres and add detailed surfaces, lighting and collision support. Original standard/articulated MTA-style buses, school buses and paratransit supplement that kit. They suggest present-day vehicle classes; they are not scanned NYC fleets or licensed manufacturer replicas.

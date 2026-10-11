@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 import {TrafficSimulation} from './traffic-simulation.js';
-import {samplePath,streetAxis,signalState,angleDifference,random} from './traffic-network.js';
-import {makeVehicle,loadVehicleTextures,updateVehicleVisual} from './vehicles.js';
+import {samplePath,streetAxis,signalState,angleDifference,random,roadWidth} from './traffic-network.js';
+import {VEHICLES,makeVehicle,loadVehicleTextures,updateVehicleVisual,makeVehicleBatch,vehicleColor,vehicleRoofTriangles,disposeVehicle} from './vehicles.js';
 import {triangleRoof} from './vehicle-import.js';
 
 export async function loadTraffic(){
@@ -17,7 +17,8 @@ function signTexture(text,bg='#e8e6d7',fg='#254c72',width=256){
 }
 export class TrafficWorld {
  constructor(scene,map,flight,bundle){
-  this.map=map;this.flight=flight;this.root=new THREE.Group();this.root.name='NYC traffic';scene.add(this.root);this.sim=new TrafficSimulation(bundle.data,bundle.profile,map);this.matrix=new THREE.Object3D();this.nearby=[];
+  this.map=map;this.flight=flight;this.root=new THREE.Group();this.root.name='NYC traffic';scene.add(this.root);this.sim=new TrafficSimulation(bundle.data,bundle.profile,map);this.matrix=new THREE.Object3D();this.nearby=[];this.detailed=new Set();this.vehiclePool=new Map();this.batches=new Map();
+  for(const type of Object.keys(VEHICLES)){const mesh=makeVehicleBatch(type);this.root.add(mesh);this.batches.set(type,mesh);}
   const capacity=512;
   this.poles=instanced(this.root,cylinder,metal,capacity);this.arms=instanced(this.root,armGeometry,metal,capacity);this.heads=instanced(this.root,headGeometry,black,capacity);this.bulbs=instanced(this.root,bulbGeometry,new THREE.MeshBasicMaterial({color:0xffffff,toneMapped:false}),capacity*3);
   this.crossings=instanced(this.root,new THREE.BoxGeometry(.52,.018,3.4),new THREE.MeshStandardMaterial({color:0xe1ded0,roughness:.93}),capacity*24);
@@ -26,7 +27,7 @@ export class TrafficWorld {
    const approaches=[];
    for(const n of c.nodes)for(const e of n.incoming){
     if(e.path.length<12||approaches.some(a=>Math.abs(angleDifference(a.heading,e.exitHeading))<.5))continue;
-    approaches.push({edge:e,heading:e.exitHeading,axis:streetAxis(e.exitHeading),width:Math.min(17,Math.max(7,e.road.lanes*3.2)),node:n});
+    approaches.push({edge:e,heading:e.exitHeading,axis:streetAxis(e.exitHeading),width:roadWidth(e.road),node:n});
    }
    return {control:c,approaches:approaches.slice(0,4),pedestrians:[]};
   });
@@ -44,7 +45,7 @@ export class TrafficWorld {
  roofAt(actor,x,z){
   const dx=x-actor.x,dz=z-actor.z,c=Math.cos(actor.heading),s=Math.sin(actor.heading),lx=dx*c-dz*s,lz=dx*s+dz*c,d=actor.spec;
   if(Math.abs(lx)>d.width/2-.035||Math.abs(lz)>d.length/2)return null;
-  const triangles=actor.root?.userData.roofTriangles;
+  const triangles=actor.root?.userData.roofTriangles||vehicleRoofTriangles(actor.type,actor.seed);
   if(triangles?.length){const y=triangleRoof(triangles,lx,lz);if(y!==null)return y;return null;}
   if(Math.abs(lz-d.roofZ)>d.roofLength/2)return Math.min(d.height-.6,1.15);
   if(actor.bus){if(Math.abs(lx)<d.width*.325&&Math.abs(lz-1.9)<1.25)return d.height+.285;if(actor.type==='articulated'&&Math.abs(lz)<.7)return d.height+.065;return d.height+.04;}
@@ -67,14 +68,34 @@ export class TrafficWorld {
   this.sim.setClock(hours,day);for(const a of this.sim.actors)a.rider=this.flight.vehicleSupport===a;
   this.sim.step(dt,position);if(dt)this.carry(this.flight);
   this.nearby=[];
+  const visible=[],close=[];
   for(const actor of this.sim.actors){
-   const distance=Math.hypot(actor.x-position.x,actor.z-position.z),visible=actor.active&&(distance<620||actor.rider);
-   if(visible&&!actor.root){actor.root=makeVehicle(actor.type,actor.seed,actor.bus?actor.route:null);this.root.add(actor.root);}
-   if(actor.root){actor.root.visible=visible;if(visible){actor.root.position.set(actor.x,0,actor.z);actor.root.rotation.y=actor.heading;updateVehicleVisual(actor.root,actor.speed,actor.braking,actor.indicator,night,this.sim.time,actor.doors,distance,actor.tripDistance);}}
+   const distance=Math.hypot(actor.x-position.x,actor.z-position.z);actor.viewDistance=distance;
+   if(actor.active&&(distance<620||actor.rider)){visible.push(actor);if(distance<(actor.root?85:70)||actor.rider)close.push(actor);}
    if(actor.active&&(distance<90||actor.rider))this.nearby.push(actor);
   }
+  close.sort((a,b)=>(a.rider?-100:0)+a.viewDistance-((b.rider?-100:0)+b.viewDistance));
+  const detailed=new Set(close.slice(0,32));
+  for(const actor of this.detailed)if(!detailed.has(actor)){
+   const key=this.vehicleKey(actor),pool=this.vehiclePool.get(key)||[];actor.root.visible=false;pool.push(actor.root);this.vehiclePool.set(key,pool);actor.root=null;
+  }
+  for(const actor of detailed){
+   if(!actor.root){const key=this.vehicleKey(actor),pool=this.vehiclePool.get(key);actor.root=pool?.pop()||makeVehicle(actor.type,actor.seed,actor.bus?actor.route:null);if(!actor.root.parent)this.root.add(actor.root);}
+   actor.root.visible=true;actor.root.position.set(actor.x,0,actor.z);actor.root.rotation.y=actor.heading;updateVehicleVisual(actor.root,actor.speed,actor.braking,actor.indicator,night,this.sim.time,actor.doors,0,actor.tripDistance);
+  }
+  this.detailed=detailed;
+  // Bound the detailed cache even after travelling through the entire map.
+  let cached=0;for(const pool of this.vehiclePool.values())for(let i=pool.length-1;i>=0;i--)if(++cached>64)disposeVehicle(pool.splice(i,1)[0]);
+  const counts=new Map();
+  for(const actor of visible)if(!detailed.has(actor)){
+   const mesh=this.batches.get(actor.type),index=counts.get(actor.type)||0;if(index>=mesh.instanceMatrix.count)continue;
+   this.setInstance(mesh,index,actor.x,0,actor.z,actor.heading);mesh.setColorAt(index,new THREE.Color(vehicleColor(actor.type,actor.seed)));counts.set(actor.type,index+1);
+  }
+  for(const [type,mesh] of this.batches){const count=counts.get(type)||0;mesh.count=count;mesh.instanceMatrix.clearUpdateRanges();if(count)mesh.instanceMatrix.addUpdateRange(0,count*16);mesh.instanceMatrix.needsUpdate=true;if(mesh.instanceColor){mesh.instanceColor.clearUpdateRanges();if(count)mesh.instanceColor.addUpdateRange(0,count*3);mesh.instanceColor.needsUpdate=true;}}
+  this.renderedCount=visible.length;
   this.updateSignals(position);this.updateStops(position,night);
  }
+ vehicleKey(actor){return actor.bus?`${actor.type}:${actor.route.route}:${actor.route.headsign}`:`${actor.type}:${Math.abs(Math.trunc(actor.seed))%7}`;}
  setInstance(mesh,index,x,y,z,heading=0,sx=1,sy=1,sz=1){this.matrix.position.set(x,y,z);this.matrix.rotation.set(0,heading,0);this.matrix.scale.set(sx,sy,sz);this.matrix.updateMatrix();mesh.setMatrixAt(index,this.matrix.matrix);}
  updateSignals(position){
   let pole=0,bulb=0,crossing=0,walker=0;const onColors=[new THREE.Color(0xfc4827),new THREE.Color(0xffc247),new THREE.Color(0x7bec94)],offColors=[new THREE.Color(0x382620),new THREE.Color(0x373020),new THREE.Color(0x20392d)];
@@ -135,5 +156,5 @@ export class TrafficWorld {
    if(stop.group){stop.group.visible=visible;const boarding=this.sim.actors.some(a=>a.bus&&a.active&&a.dwell>0&&Math.hypot(a.x-stop.x,a.z-stop.z)<12);if(visible)stop.people.forEach((p,i)=>{p.visible=!boarding||Math.sin(this.sim.time*.5+i)>0;});}
   }
  }
- snapshot(){return {actors:this.sim.actors.filter(a=>a.active).length,buses:this.sim.actors.filter(a=>a.bus&&a.active).length,signals:this.sim.network.controllers.length,visible:this.nearby.length,riding:this.flight.vehicleSupport?.type||null};}
+ snapshot(){return {actors:this.sim.actors.filter(a=>a.active).length,buses:this.sim.actors.filter(a=>a.bus&&a.active).length,signals:this.sim.network.controllers.length,visible:this.renderedCount,nearby:this.nearby.length,parked:this.sim.actors.filter(a=>a.active&&a.parked).length,detailed:this.detailed.size,riding:this.flight.vehicleSupport?.type||null};}
 }
