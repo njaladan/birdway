@@ -1,0 +1,202 @@
+{
+  "accessed": "2026-10-11",
+  "dotQuery": "$select=hh,avg(vol) as mean_volume,count(*) as samples&$where=boro = 'Manhattan' AND yr >= 2024&$group=hh&$order=hh",
+  "hourlyCounts": [
+    {
+      "hh": "0",
+      "mean_volume": "99.1678529062870700",
+      "samples": "1686"
+    },
+    {
+      "hh": "1",
+      "mean_volume": "67.4202726733847066",
+      "samples": "1687"
+    },
+    {
+      "hh": "2",
+      "mean_volume": "49.6442992874109264",
+      "samples": "1684"
+    },
+    {
+      "hh": "3",
+      "mean_volume": "42.9442467378410439",
+      "samples": "1686"
+    },
+    {
+      "hh": "4",
+      "mean_volume": "55.6251482799525504",
+      "samples": "1686"
+    },
+    {
+      "hh": "5",
+      "mean_volume": "85.0906935388263189",
+      "samples": "1687"
+    },
+    {
+      "hh": "6",
+      "mean_volume": "136.3157582938388626",
+      "samples": "1688"
+    },
+    {
+      "hh": "7",
+      "mean_volume": "176.4016587677725118",
+      "samples": "1688"
+    },
+    {
+      "hh": "8",
+      "mean_volume": "178.2405213270142180",
+      "samples": "1688"
+    },
+    {
+      "hh": "9",
+      "mean_volume": "171.3708530805687204",
+      "samples": "1688"
+    },
+    {
+      "hh": "10",
+      "mean_volume": "169.9176540284360190",
+      "samples": "1688"
+    },
+    {
+      "hh": "11",
+      "mean_volume": "172.3655213270142180",
+      "samples": "1688"
+    },
+    {
+      "hh": "12",
+      "mean_volume": "177.8631516587677725",
+      "samples": "1688"
+    },
+    {
+      "hh": "13",
+      "mean_volume": "183.6303317535545024",
+      "samples": "1688"
+    },
+    {
+      "hh": "14",
+      "mean_volume": "195.7991706161137441",
+      "samples": "1688"
+    },
+    {
+      "hh": "15",
+      "mean_volume": "203.8139810426540284",
+      "samples": "1688"
+    },
+    {
+      "hh": "16",
+      "mean_volume": "203.6451421800947867",
+      "samples": "1688"
+    },
+    {
+      "hh": "17",
+      "mean_volume": "201.4955542382928275",
+      "samples": "1687"
+    },
+    {
+      "hh": "18",
+      "mean_volume": "197.6103202846975089",
+      "samples": "1686"
+    },
+    {
+      "hh": "19",
+      "mean_volume": "187.2833432128037937",
+      "samples": "1687"
+    },
+    {
+      "hh": "20",
+      "mean_volume": "172.3436018957345972",
+      "samples": "1688"
+    },
+    {
+      "hh": "21",
+      "mean_volume": "162.2246591582691168",
+      "samples": "1687"
+    },
+    {
+      "hh": "22",
+      "mean_volume": "149.6318909306461174",
+      "samples": "1687"
+    },
+    {
+      "hh": "23",
+      "mean_volume": "131.7568208778173191",
+      "samples": "1686"
+    }
+  ],
+  "hourlyDemand": [
+    0.4866,
+    0.3308,
+    0.2436,
+    0.2107,
+    0.2729,
+    0.4175,
+    0.6688,
+    0.8655,
+    0.8745,
+    0.8408,
+    0.8337,
+    0.8457,
+    0.8727,
+    0.901,
+    0.9607,
+    1.0,
+    0.9992,
+    0.9886,
+    0.9696,
+    0.9189,
+    0.8456,
+    0.7959,
+    0.7342,
+    0.6465
+  ],
+  "tlcMonthly": [
+    {
+      "Month/Year": "2026-07",
+      "License Class": "FHV - High Volume",
+      "Trips Per Day": "674,877",
+      "Farebox Per Day": "-",
+      "Unique Drivers": "87,170",
+      "Unique Vehicles": "84,389",
+      "Vehicles Per Day": "61,044",
+      "Avg Days Vehicles on Road": "22.4",
+      "Avg Hours Per Day Per Vehicle": "6.4",
+      "Avg Days Drivers on Road": "22.2",
+      "Avg Hours Per Day Per Driver": "6.3",
+      "Avg Minutes Per Trip": "19.0",
+      "Percent of Trips Paid with Credit Card": "-",
+      "Trips Per Day Shared": "5,355"
+    },
+    {
+      "Month/Year": "2026-07",
+      "License Class": "Yellow",
+      "Trips Per Day": "113,811",
+      "Farebox Per Day": "3,112,781",
+      "Unique Drivers": "13,038",
+      "Unique Vehicles": "10,062",
+      "Vehicles Per Day": "8,494",
+      "Avg Days Vehicles on Road": "26.2",
+      "Avg Hours Per Day Per Vehicle": "8.1",
+      "Avg Days Drivers on Road": "23.0",
+      "Avg Hours Per Day Per Driver": "7.1",
+      "Avg Minutes Per Trip": "17.2",
+      "Percent of Trips Paid with Credit Card": "89%",
+      "Trips Per Day Shared": "-"
+    }
+  ],
+  "fleetWeights": {
+    "sedan": 24,
+    "suv": 18,
+    "rideshare": 31,
+    "taxi": 8,
+    "taxiVan": 3,
+    "van": 8,
+    "boxTruck": 3,
+    "sanitation": 1,
+    "paratransit": 1.5,
+    "schoolBus": 1.5,
+    "police": 0.6,
+    "ambulance": 0.25,
+    "fire": 0.15
+  },
+  "fleetWeightsMeasured": false
+}
