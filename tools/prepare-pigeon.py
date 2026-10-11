@@ -27,7 +27,9 @@ def paint(obj,fn):
  for loop in obj.data.loops:colors.data[loop.index].color=linear(fn(obj.data.vertices[loop.vertex_index]))
 def plumage(v):
  x,y,z=v.co;weights={model.vertex_groups[g.group].name:g.weight for g in v.groups};dominant=max(weights,key=weights.get,default='')
- if 'leg' in dominant:return (.63,.34,.32)
+ # Leg vertex groups overlap the belly and hips in this source rig. Tint only
+ # the low exposed shins/feet; above 6 cm remains in the bird's grey plumage.
+ if 'leg' in dominant and z<.06:return (.63,.34,.32)
  if y>.137 and z>.17:return (.48,.47,.43) # beak / white cere
  if 'wing' in dominant:
   a=abs(x);band=(.085<a<.106 or .132<a<.154) and y<.018
@@ -38,6 +40,13 @@ def plumage(v):
   return (.25,.43,.36) if x<0 else (.38,.32,.46)
  shade=.49+.08*max(-1,min(1,z/.15));return (shade*.92,shade,shade*1.08)
 paint(model,plumage)
+legPink=linear((.63,.34,.32));pinkPoints={}
+colors=model.data.color_attributes['Plumage']
+for loop in model.data.loops:
+ if all(abs(a-b)<1e-5 for a,b in zip(colors.data[loop.index].color,legPink)):
+  vertex=model.data.vertices[loop.vertex_index];pinkPoints[vertex.index]=vertex.co.z
+if not pinkPoints or max(pinkPoints.values())>=.06:raise RuntimeError('Pink plumage leaked above the exposed leg region')
+print('LEG PLUMAGE CHECK',len(pinkPoints),'vertices; z range',round(min(pinkPoints.values()),4),round(max(pinkPoints.values()),4),'m')
 # Eyes are weighted to the existing head bone and joined into the same mesh.
 extras=[]
 for side in [-1,1]:
@@ -91,7 +100,7 @@ for name,frames in [('Flight',24),('Glide',24),('Flare',24),('Idle',48),('Walk',
     b=rig.pose.bones[f'{side}-wing-1'];axis=b.bone.matrix_local.to_3x3().inverted()@Vector((1,0,0))
     b.rotation_quaternion=Quaternion(axis,s*.23)@glidePose[b.name]
    for b in rig.pose.bones:
-    if 'leg' in b.name:b.rotation_quaternion=legPose[b.name]
+    if 'leg' in b.name:b.rotation_quaternion=idleSamples[0][b.name]
    tailWidth=1;wingSpan=1.24
   else:
    for side,s in [('left',1),('right',-1)]:

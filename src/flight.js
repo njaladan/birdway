@@ -39,10 +39,11 @@ export class Flight {
   // glides. The same pulse gives a small lift impulse; Space remains the
   // stronger, deliberate flap input for takeoff and climbing.
   const beatPhase=this.elapsed%2.65;
-  const heightAboveSurface=Math.max(0,this.position.y-this.map.surface(this.position.x,this.position.z));
+  const surfaceHeight=this.map.surface(this.position.x,this.position.z);
+  const heightAboveSurface=Math.max(0,this.position.y-surfaceHeight);
   const autoFlap=this.flying&&!this.landing&&!glide&&!brake&&dive<.08&&heightAboveSurface>24&&beatPhase<1.2?Math.sin(Math.PI*beatPhase/1.2):0;
   if(this.landing&&climb>.35){this.landing=false;this.onEvent('landingCancel');}
-  const descendingTowardSurface=this.flying&&this.vertical<-.35&&heightAboveSurface<24;
+  const descendingTowardSurface=this.flying&&this.vertical<-.35&&heightAboveSurface<24&&(surfaceHeight>0||this.map.onLand(this.position.x,this.position.z));
   this.approachBlend=THREE.MathUtils.lerp(this.approachBlend,this.landing||descendingTowardSurface?1:0,smoothing(2.3));
   const cruiseTarget=this.dashTime>0?FLIGHT.dash:brake?FLIGHT.brake:glide?FLIGHT.glide:THREE.MathUtils.lerp(FLIGHT.cruise,FLIGHT.flap,this.flapStrength);
   const nearSurface=1-THREE.MathUtils.smoothstep(heightAboveSurface,1.5,7);

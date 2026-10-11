@@ -36,7 +36,9 @@ assert.ok(Math.abs(takeoffSmooth.flight.position.y-startY)<.03);assert.ok(takeof
 run(takeoffSmooth.flight,75);assert.ok(takeoffSmooth.flight.position.y>startY+1,'a held flap builds lift over time');
 
 // Descending near a surface automatically eases speed; landing mode flares gently.
-const approach=create(14);approach.flight.vertical=-5;approach.flight.speed=35;run(approach.flight,45);
+const river=create(14);river.flight.vertical=-5;river.flight.speed=35;run(river.flight,45);
+assert.ok(river.flight.speed>33,'descending over open water does not start a landing approach');
+map.onLand=()=>true;const approach=create(14);approach.flight.vertical=-5;approach.flight.speed=35;run(approach.flight,45);
 assert.ok(approach.flight.speed<27,'a low descending approach automatically slows the bird');
 map.onLand=()=>true;const flare=create(5);flare.flight.vertical=-3;flare.flight.speed=20;flare.flight.landing=true;run(flare.flight,240);
 assert.equal(flare.flight.flying,false,'landing approach settles onto the surface');
@@ -70,6 +72,7 @@ const foldedBounds=skinBounds(),foldedTail=tail.scale.x;
 assert.ok(foldedBounds.x<.16,`grounded skinned silhouette tucks inside 16 cm (${foldedBounds.x.toFixed(3)} m wide)`);
 for(let t=.52;t<.76;t+=1/60)gaitBird.userData.animate(t,true,35,0,{flapStrength:0,glide:true});
 const glideBounds=skinBounds(),glideTail=tail.scale.x;
+const glideUpper=leftLeg.quaternion.clone(),glideLower=leftKnee.quaternion.clone();
 assert.equal(gaitBird.userData.animationName,'Glide');assert.equal(gaitBird.userData.flightPose,'glide');
 assert.ok(glideBounds.x>foldedBounds.x*1.35,'gliding wings extend beyond the folded walking pose');
 assert.ok(glideBounds.x>.32,'glide restores the full outer-wing reach');
@@ -79,8 +82,10 @@ assert.equal(gaitBird.userData.animationName,'Flight');assert.equal(gaitBird.use
 assert.ok(gaitBird.userData.flapFrequency>=5.5&&gaitBird.userData.flapFrequency<6,'pigeon wingbeats run at a quick 5–6 cycles per second');
 const flightTail=tail.scale.x;
 gaitBird.userData.animate(1.1,true,8,0,{flapStrength:0,glide:true,landing:true});
+for(let t=1.11;t<1.36;t+=1/60)gaitBird.userData.animate(t,true,8,0,{flapStrength:0,glide:true,landing:true});
 assert.equal(gaitBird.userData.animationName,'Flare');assert.equal(gaitBird.userData.flightPose,'flare');
 assert.ok(tail.scale.x>flightTail,'landing flare opens the tail after the tucked glide');
+assert.ok(leftLeg.quaternion.angleTo(glideUpper)>.05&&leftKnee.quaternion.angleTo(glideLower)>.05,'landing flare extends the feet from their tucked glide pose');
 
 const periodicBird=makeBird(),periodicFlight=new Flight(periodicBird,new THREE.PerspectiveCamera(),map,new THREE.Vector3(0,300,0));periodicFlight.flying=true;
 const cruisePos=periodicFlight.position.clone(),poses=new Set();
