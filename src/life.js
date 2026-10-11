@@ -90,7 +90,11 @@ export class CityLife {
   this.flock.forEach((b,i)=>{
    const angle=this.flight.heading+(i%2?-.55:.55),radius=this.flight.flying?3+Math.floor(i/2)*2:.45+Math.floor(i/2)*.25;
    const target=p.clone().add(new THREE.Vector3(Math.sin(angle)*radius,this.flight.flying?Math.sin(this.time+i)*.7:-.1,Math.cos(angle)*radius));
-   if(!this.flight.flying){target.y=this.map.surface(target.x,target.z)+BIRD_CLEARANCE;if(target.y>p.y+3||target.y<p.y-3)target.copy(this.nest).add(new THREE.Vector3(Math.cos(i)*.45,0,Math.sin(i)*.45));}
+   if(!this.flight.flying){
+    const moving=this.map.dynamicAt?.(target.x,target.z);target.y=Math.max(this.map.surface(target.x,target.z),moving?.h||0)+BIRD_CLEARANCE;
+    if(this.flight.vehicleSupport&&moving?.vehicle===this.flight.vehicleSupport){const a=this.flight.vehicleSupport;if(b.userData.carrier===a.id){const dx=b.position.x-a.previousX,dz=b.position.z-a.previousZ,c=Math.cos(a.previousHeading),s=Math.sin(a.previousHeading),lx=dx*c-dz*s,lz=dx*s+dz*c;b.position.x=a.x+lx*Math.cos(a.heading)+lz*Math.sin(a.heading);b.position.z=a.z-lx*Math.sin(a.heading)+lz*Math.cos(a.heading);}b.userData.carrier=a.id;}else b.userData.carrier=null;
+    if(target.y>p.y+3||target.y<p.y-3)target.copy(this.nest).add(new THREE.Vector3(Math.cos(i)*.45,0,Math.sin(i)*.45));
+   }
    else target.y=Math.max(target.y,this.map.surface(target.x,target.z)+1.7);
    if(b.position.lengthSq()<1)b.position.copy(target);else b.position.lerp(target,1-Math.exp(-dt*2));b.rotation.set(this.flight.pitch,this.flight.heading,this.flight.bank*.8,'YXZ');b.userData.animate(this.time+i*.3,this.flight.flying,this.flight.speed);
   });
@@ -156,16 +160,11 @@ export class CityLife {
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(cablePositions,3));this.scene.add(new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:0x777e72})));
  }
  buildStreetLife(){
-  this.vehicles=[];const nearby=this.map.streets.filter(s=>s.points.length>=2&&!/F D R|Ramp|Bridge|Tunnel/.test(s.name));
-  for(let i=0;i<28;i++){const s=nearby[Math.floor(rand(i+888)*nearby.length)],a=s.points[0],b=s.points[s.points.length-1],len=Math.hypot(b[0]-a[0],b[1]-a[1]);if(len<40||len>500)continue;
-   const g=new THREE.Group();this.scene.add(g);const color=i%3===0?0xc6a766:i%3===1?0x929fa3:0xa2ae94;box(g,color,0,.8,0,1.7,.9,3.8);box(g,0x768c8e,0,1.4,-.3,1.5,.7,2);box(g,color,0,1.83,-.3,1.6,.1,2.1);
-   for(const x of [-.85,.85])for(const z of [-1.2,1.2]){const wheel=mesh(g,new THREE.CylinderGeometry(.32,.32,.12,12),0x434c44,x,.4,z);wheel.rotation.z=Math.PI/2;}
-   g.rotation.y=Math.atan2(-(b[0]-a[0]),-(b[1]-a[1]));this.vehicles.push({g,a,b,t:rand(i+90),length:len});
-  }
+  const nearby=this.map.streets.filter(s=>s.points.length>=2&&!/F D R|Ramp|Bridge|Tunnel/.test(s.name));
   const selected=nearby.filter((_,i)=>i%19===0).slice(0,60);this.walkers=[];
   for(let i=0;i<selected.length;i++){const s=selected[i],a=s.points[0],b=s.points[s.points.length-1];if(Math.hypot(b[0]-a[0],b[1]-a[1])<12)continue;const g=new THREE.Group();this.scene.add(g);mesh(g,new THREE.CapsuleGeometry(.23,.75,4,8),[0x898d72,0xb9a18b,0x6e838c][i%3],0,1.1,0);mesh(g,new THREE.SphereGeometry(.18,10,8),0xc7ad8a,0,1.84,0);for(const x of [-.12,.12])box(g,0x63726b,x,.38,0,.15,.65,.18);this.walkers.push({g,a,b,t:rand(i+66),length:Math.hypot(b[0]-a[0],b[1]-a[1])});}
  }
- updateStreet(dt){for(const v of this.vehicles){v.t=(v.t+dt*2.8/v.length)%1;v.g.position.set(THREE.MathUtils.lerp(v.a[0],v.b[0],v.t),0,THREE.MathUtils.lerp(v.a[1],v.b[1],v.t));v.g.visible=Math.hypot(v.g.position.x-this.flight.position.x,v.g.position.z-this.flight.position.z)<700&&!this.map.buildingAt(v.g.position.x,v.g.position.z);}
+ updateStreet(dt){
   for(const v of this.walkers){v.t=(v.t+dt*.65/v.length)%1;v.g.position.set(THREE.MathUtils.lerp(v.a[0],v.b[0],v.t)+5.8,Math.sin(this.time*6)*.025,THREE.MathUtils.lerp(v.a[1],v.b[1],v.t));v.g.visible=Math.hypot(v.g.position.x-this.flight.position.x,v.g.position.z-this.flight.position.z)<250&&!this.map.buildingAt(v.g.position.x,v.g.position.z);}
  }
 }

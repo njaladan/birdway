@@ -13,11 +13,12 @@ import {makeEnvironment} from './environment.js';
 import {loadFacadeTextures} from './facades.js';
 import {buildWaterfront} from './waterfront.js';
 import {makeBoats} from './boats.js';
+import {loadTraffic,TrafficWorld} from './traffic.js';
 const $=id=>document.getElementById(id);
 const touchDevice=matchMedia('(any-pointer: coarse)').matches||navigator.maxTouchPoints>0;
 let touchEnabled=touchDevice;
 document.body.classList.toggle('touch-enabled',touchEnabled);
-let renderer,scene,camera,map,city,sky,environment,waterfront,boats,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio(),qualityMode='balanced',perfWindow=0,perfFrames=0,slowFrames=0,fastWindows=0;
+let renderer,scene,camera,map,city,sky,environment,waterfront,boats,traffic,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio(),qualityMode='balanced',perfWindow=0,perfFrames=0,slowFrames=0,fastWindows=0;
 const toast=(message)=>{ $('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.remove('show'),4200);};
 async function boot(){
  try{
@@ -26,7 +27,9 @@ async function boot(){
   renderer.shadowMap.enabled=!touchDevice;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,16000);sky=makeSky(scene);environment=makeEnvironment(renderer,scene,sky);
   $('loading-progress').style.width='10%';map=await loadGeography();sky.setGeography(map.land);boats=makeBoats(scene,map);await loadBirdModel();$('loading-note').textContent=`Opening ${map.buildings.length.toLocaleString()} rooftops across the Hudson…`;
-  const [parkData]=await Promise.all([loadParks(map.jerseyCity),loadFacadeTextures()]);
+  const [parkData,trafficBundle]=await Promise.all([loadParks(map.jerseyCity),loadTraffic(),loadFacadeTextures()]);
+  // Current directed OSM roads also supply the asphalt under the traffic graph.
+  map.streets=[...trafficBundle.data.roads.map(r=>({name:r.name,points:r.points,width:Math.min(17,Math.max(7,r.lanes*3.2))})),...map.jerseyCity.streets];
   city=await buildCity(scene,map,p=>$('loading-progress').style.width=`${15+p*65}%`);
   city.root.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.userData.distant)o.castShadow=false;else if(o.material.depthWrite!==false)o.castShadow=true;}});
   waterfront=buildWaterfront(scene,map,parkData);
@@ -45,10 +48,10 @@ async function boot(){
   mesh(nestGroup,new THREE.CylinderGeometry(.17,.20,.018,24),0x9b8960,0,-.025,0);
   for(let i=0;i<30;i++){const a=i*Math.PI*2/30;const twig=box(nestGroup,0x8e7a58,Math.cos(a)*.17,.01+rand(i)*.015,Math.sin(a)*.17,.01,.008,.085);twig.rotation.y=-a+rand(i)*.7;}
   const bird=makeBird();scene.add(bird);flight=new Flight(bird,camera,map,nest);flight.heading=flight.homeHeading=1.45;flight.cameraTarget.copy(nest);
-  life=new CityLife(scene,map,flight,nest,audio,toast,parkData);hours=life.save.hours;ui=new GameInterface({life,flight,map,nest,renderer,scene,camera,toast,openModal,closeModal});
-  flight.onEvent=event=>{if(event==='dash')toast('A quick beat of the wings.');if(event==='perch')toast('A soft landing. Stay a while.');if(event==='landing')toast('An easy approach. Guide yourself down to a roof or street.');};
+  life=new CityLife(scene,map,flight,nest,audio,toast,parkData);hours=life.save.hours;traffic=new TrafficWorld(scene,map,flight,trafficBundle);ui=new GameInterface({life,flight,map,nest,renderer,scene,camera,toast,openModal,closeModal});
+  flight.onEvent=event=>{if(event==='dash')toast('A quick beat of the wings.');if(event==='perch')toast(flight.vehicleSupport?'A moving perch. Ride along, or press Space to fly.':'A soft landing. Stay a while.');if(event==='landing')toast('An easy approach. Guide yourself down to a roof or street.');};
   flight.onControlAction=action=>{if(!started||paused||!$('modal-shade').hidden)return;if(action==='dash')flight.dash();if(action==='interact')life.interact();};
-  $('loading-progress').style.width='100%';const initialLight=sky.update(hours,0,nest);city.night.value=initialLight.night;environment.update(hours);city.update(nest,renderer.getPixelRatio());life.update(0);waterfront.update(nest,initialLight.night);for(let i=0;i<100;i++)flight.update(.016);renderer.render(scene,camera);
+  $('loading-progress').style.width='100%';const initialLight=sky.update(hours,0,nest);city.night.value=initialLight.night;environment.update(hours);city.update(nest,renderer.getPixelRatio());life.update(0);traffic.update(0,nest,initialLight.night,hours);waterfront.update(nest,initialLight.night);for(let i=0;i<100;i++)flight.update(.016);renderer.render(scene,camera);
   $('loading').hidden=true;$('welcome').hidden=false;
   installControls();requestAnimationFrame(frame);
  }catch(error){console.error(error);$('loading-note').textContent=error.message;$('loading-progress').style.width='0';}
@@ -105,6 +108,7 @@ function updateAudio(){$('audio-label').textContent=audio.enabled?'on':'off';$('
 function openModal(title,kicker,html){paused=true;flight.clearInput();$('modal-title').textContent=title;$('modal-kicker').textContent=kicker;$('modal-content').innerHTML=html;$('modal-shade').hidden=false;$('close-modal').focus();syncTouch();}
 function closeModal(){$('modal-shade').hidden=true;paused=false;$('pause-button').textContent='Ⅱ';$('pause-button').setAttribute('aria-label','Pause game');syncTouch();}
 function settings(){openModal('Make yourself comfortable','YOUR OWN PACE',`<div class="settings-row"><label for="time-slider">Time of day<small>Watch the city turn gold, then glow.</small></label><input id="time-slider" type="range" min="0" max="23.99" step=".01" value="${hours}"></div><div class="time-presets"><button data-time="8">Morning</button><button data-time="13">Daylight</button><button data-time="17.65">Golden hour</button><button data-time="22">Night</button></div><div class="settings-row"><label for="day-length">Day length<small>Choose a quicker cycle to explore the light.</small></label><input id="day-length" type="range" min="1" max="60" step="1" value="${dayLength}"><span id="day-length-label">${dayLength} min</span></div><div class="settings-row"><label for="cycle">Day / night cycle<small>Hold the light still, or let the day drift by.</small></label><input id="cycle" type="checkbox" ${autoTime?'checked':''}></div><div class="settings-row"><label for="volume">Ambient sound<small>An original, gentle city soundtrack.</small></label><input id="volume" type="range" min="0" max="1" step=".01" value="${audio.volume}"></div><div class="settings-row"><label for="quality">Rendering quality<small>Light uses fewer pixels and no shadows; try it on a phone.</small></label><select id="quality"><option value="1.25">Balanced</option><option value="1">Light</option><option value="2">High</option></select></div><p>Drag the view to look around with a mouse or finger. Touch controls appear on touch screens; keyboard and gamepad also work.</p>`);$('time-slider').oninput=e=>{hours=+e.target.value;autoTime=false;$('cycle').checked=false;};for(const b of $('modal-content').querySelectorAll('[data-time]'))b.onclick=()=>{hours=+b.dataset.time;autoTime=false;$('time-slider').value=hours;$('cycle').checked=false;};$('day-length').oninput=e=>{dayLength=+e.target.value;$('day-length-label').textContent=dayLength+' min';};$('cycle').onchange=e=>autoTime=e.target.checked;$('volume').oninput=e=>audio.setVolume(+e.target.value);$('quality').value=qualityMode==='high'?'2':qualityMode==='light'?'1':'1.25';$('quality').onchange=e=>{const quality=+e.target.value;qualityMode=quality===1.25?'balanced':quality===1?'light':'high';renderer.setPixelRatio(Math.min(devicePixelRatio,quality));renderer.shadowMap.enabled=quality>1;renderer.userData.waterReflections=quality>1.5;perfWindow=perfFrames=slowFrames=fastWindows=0;};}
+const trafficDay=['sunday','weekday','weekday','weekday','weekday','weekday','saturday'][new Date().getDay()];
 let minimapAtlas;
 function drawMinimap(){
  const canvas=$('minimap'),ctx=canvas.getContext('2d'),w=canvas.width,h=canvas.height,p=flight.position,scale=.095;
@@ -136,12 +140,13 @@ function frame(time){requestAnimationFrame(frame);const frameSeconds=(time-last)
    perfWindow=perfFrames=slowFrames=0;
   }
  }
- if(started&&!paused){elapsed+=dt;if(autoTime)hours=(hours+dt*24/(dayLength*60))%24;flight.update(dt);life.update(dt);life.save.hours=hours;}
+ if(started&&!paused){elapsed+=dt;if(autoTime)hours=(hours+dt*24/(dayLength*60))%24;traffic.update(dt,flight.position,city.night.value,hours,trafficDay);flight.update(dt);life.update(dt);life.save.hours=hours;}
  const light=sky.update(hours,elapsed,flight.position);city.night.value=light.night;environment.update(hours);city.update(flight.position,renderer.getPixelRatio());waterfront.update(flight.position,light.night);
  boats.update(started&&!paused?dt:0,flight.position,light.night);
+ if(!started||paused)traffic.update(0,flight.position,light.night,hours,trafficDay);
  renderer.render(scene,camera);
  
- if(started){$('mode').textContent=flight.flying?(flight.landing?'COMING TO REST':'ON THE BREEZE'):'A LITTLE WADDLE';$('altitude').textContent=`${Math.round(flight.position.y)} m`;if(touchEnabled)$('touch-interact').textContent=flight.flying?(flight.landing?'Cancel land':'Land'):'Explore';const hh=Math.floor(hours),mm=Math.floor((hours-hh)*60);$('clock').textContent=`${hh%12||12}:${String(mm).padStart(2,'0')} ${hh>=12?'PM':'AM'}`;ui.update();if(!touchEnabled&&Math.floor(time/150)!==frame.mapTick){frame.mapTick=Math.floor(time/150);drawMinimap();ui.mapMarkers($('minimap'),.095,flight.position);}}
+ if(started){$('mode').textContent=flight.flying?(flight.landing?'COMING TO REST':'ON THE BREEZE'):flight.vehicleSupport?'RIDING THROUGH THE CITY':'A LITTLE WADDLE';$('altitude').textContent=`${Math.round(flight.position.y)} m`;if(touchEnabled)$('touch-interact').textContent=flight.flying?(flight.landing?'Cancel land':'Land'):'Explore';const hh=Math.floor(hours),mm=Math.floor((hours-hh)*60);$('clock').textContent=`${hh%12||12}:${String(mm).padStart(2,'0')} ${hh>=12?'PM':'AM'}`;ui.update();if(!touchEnabled&&Math.floor(time/150)!==frame.mapTick){frame.mapTick=Math.floor(time/150);drawMinimap();ui.mapMarkers($('minimap'),.095,flight.position);}}
 }
-window.birdwayState=()=>life?({position:flight.position.toArray(),camera:camera.position.toArray(),speed:flight.speed,pitch:flight.pitch,touch:{...flight.touch},birdBounds:new THREE.Box3().setFromObject(flight.bird,true).getSize(new THREE.Vector3()).toArray(),birdScreen:flight.position.clone().project(camera).toArray(),flying:flight.flying,pixelRatio:renderer.getPixelRatio(),quality:qualityMode,food:life.save.food,carried:life.save.carried,visited:[...life.save.visited],friends:life.friends,drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}):null;
+window.birdwayState=()=>life?({position:flight.position.toArray(),camera:camera.position.toArray(),speed:flight.speed,pitch:flight.pitch,touch:{...flight.touch},birdBounds:new THREE.Box3().setFromObject(flight.bird,true).getSize(new THREE.Vector3()).toArray(),birdScreen:flight.position.clone().project(camera).toArray(),flying:flight.flying,pixelRatio:renderer.getPixelRatio(),quality:qualityMode,food:life.save.food,carried:life.save.carried,visited:[...life.save.visited],friends:life.friends,traffic:traffic?.snapshot(),drawCalls:renderer.info.render.calls,triangles:renderer.info.render.triangles}):null;
 boot();

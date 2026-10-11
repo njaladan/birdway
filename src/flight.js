@@ -4,17 +4,21 @@ export const BIRD_RADIUS=.18;
 export const FLIGHT={cruise:35,flap:38,walk:3.6,turn:1.05,pitch:.34,fastPitch:.85,cameraLag:3.1,approachSpeed:12,landingSpeed:3.5,dash:90,dashDuration:1.2,dashCooldown:2,divePitch:1.18};
 export class Flight {
  constructor(bird,camera,map,nest) {
-  this.bird=bird;this.camera=camera;this.map=map;this.nest=nest.clone();this.position=nest.clone();this.previous=nest.clone();this.heading=Math.PI*.67;this.homeHeading=this.heading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys=new Set();this.peck=0;this.elapsed=0;this.distance=0;this.orbit=0;this.orbitPitch=0;this.dashTime=0;this.dashCooldown=0;this.diveTime=0;this.compactView=false;this.touch={turn:0,pitch:0,flap:false,dive:false};this.onInputClear=()=>{};this.gamepad={turn:0,pitch:0,buttons:[]};this.gamepadActionsArmed=true;this.cameraTarget=new THREE.Vector3();this.forward=new THREE.Vector3();this.desiredCamera=new THREE.Vector3();this.look=new THREE.Vector3();this.onEvent=()=>{};this.onControlAction=()=>{};
+  this.bird=bird;this.camera=camera;this.map=map;this.nest=nest.clone();this.position=nest.clone();this.previous=nest.clone();this.heading=Math.PI*.67;this.homeHeading=this.heading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys=new Set();this.peck=0;this.elapsed=0;this.distance=0;this.orbit=0;this.orbitPitch=0;this.dashTime=0;this.dashCooldown=0;this.diveTime=0;this.compactView=false;this.touch={turn:0,pitch:0,flap:false,dive:false};this.onInputClear=()=>{};this.gamepad={turn:0,pitch:0,buttons:[]};this.gamepadActionsArmed=true;this.cameraTarget=new THREE.Vector3();this.forward=new THREE.Vector3();this.desiredCamera=new THREE.Vector3();this.look=new THREE.Vector3();this.onEvent=()=>{};this.onControlAction=()=>{};this.vehicleSupport=null;this.carrierDelta=null;this.carrierVelocity=new THREE.Vector3();
   this.camera.position.set(nest.x+Math.sin(this.heading)*1.1,nest.y+.55,nest.z+Math.cos(this.heading)*1.1);this.bird.position.copy(this.position);
  }
  axis(a,b){return (this.keys.has(a)?1:0)-(this.keys.has(b)?1:0);}
- takeoff(){if(this.flying)this.landing=false;if(!this.flying){this.flying=true;this.landing=false;this.flapStrength=Math.max(this.flapStrength,.28);this.onEvent('takeoff');}}
+ supportAt(x,z){const h=this.map.surface(x,z),moving=this.map.dynamicAt?.(x,z);return moving&&moving.h>h?moving:{h,vehicle:null};}
+ detachVehicle(){const a=this.vehicleSupport;if(a){this.carrierVelocity.set(-Math.sin(a.heading)*a.speed,0,-Math.cos(a.heading)*a.speed);a.rider=false;}this.vehicleSupport=null;}
+ perchAt(x,y,z){this.position.set(x,y,z);this.flying=false;this.landing=false;this.speed=0;this.vertical=0;this.carrierVelocity.set(0,0,0);this.vehicleSupport=this.supportAt(x,z).vehicle;if(this.vehicleSupport)this.vehicleSupport.rider=true;this.onEvent('perch');}
+ takeoff(){if(this.flying)this.landing=false;if(!this.flying){this.detachVehicle();this.flying=true;this.landing=false;this.flapStrength=Math.max(this.flapStrength,.28);this.onEvent('takeoff');}}
  dash(){if(!this.flying)this.takeoff();if(this.dashCooldown>0)return;this.landing=false;this.dashTime=FLIGHT.dashDuration;this.dashCooldown=FLIGHT.dashCooldown;this.onEvent('dash');}
  land(){if(this.flying){this.landing=!this.landing;this.onEvent(this.landing?'landing':'takeoff');}}
  clearInput(){this.touch.turn=this.touch.pitch=0;this.touch.flap=this.touch.dive=false;this.onInputClear();this.keys.clear();this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;}
- home(){this.position.copy(this.nest);this.previous.copy(this.nest);this.heading=this.homeHeading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.clearInput();this.diveTime=0;this.dashTime=0;this.dashCooldown=0;this.orbit=0;this.orbitPitch=0;this.peck=0;this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;this.camera.position.set(this.nest.x+Math.sin(this.heading)*1.1,this.nest.y+.55,this.nest.z+Math.cos(this.heading)*1.1);this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));this.cameraTarget.copy(this.nest).addScaledVector(this.forward,.18);this.cameraTarget.y+=.04;this.bird.position.copy(this.nest);this.bird.rotation.set(0,this.heading,0,'YXZ');this.onEvent('home');}
+ home(){this.detachVehicle();this.carrierDelta=null;this.carrierVelocity.set(0,0,0);this.position.copy(this.nest);this.previous.copy(this.nest);this.heading=this.homeHeading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.clearInput();this.diveTime=0;this.dashTime=0;this.dashCooldown=0;this.orbit=0;this.orbitPitch=0;this.peck=0;this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;this.camera.position.set(this.nest.x+Math.sin(this.heading)*1.1,this.nest.y+.55,this.nest.z+Math.cos(this.heading)*1.1);this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));this.cameraTarget.copy(this.nest).addScaledVector(this.forward,.18);this.cameraTarget.y+=.04;this.bird.position.copy(this.nest);this.bird.rotation.set(0,this.heading,0,'YXZ');this.onEvent('home');}
  update(dt){
-  dt=THREE.MathUtils.clamp(dt,0,.05);this.elapsed+=dt;this.dashTime=Math.max(0,this.dashTime-dt);this.dashCooldown=Math.max(0,this.dashCooldown-dt);this.peck=Math.max(0,this.peck-dt*2.5);this.previous.copy(this.position);
+  dt=THREE.MathUtils.clamp(dt,0,.05);this.elapsed+=dt;this.dashTime=Math.max(0,this.dashTime-dt);this.dashCooldown=Math.max(0,this.dashCooldown-dt);this.peck=Math.max(0,this.peck-dt*2.5);this.previous.copy(this.position);if(this.carrierDelta){this.previous.sub(this.carrierDelta);this.carrierDelta=null;}
+  const carriedAtStart=this.vehicleSupport;
   const pads=globalThis.navigator?.getGamepads?.(),pad=pads&&Array.from(pads).find(Boolean);
   const dead=v=>{v=THREE.MathUtils.clamp(v||0,-1,1);return Math.abs(v)<.13?0:Math.sign(v)*(Math.abs(v)-.13)/.87;};
   this.gamepad.turn=pad?dead(pad.axes[0]):0;this.gamepad.pitch=pad?-dead(pad.axes[1]):0;
@@ -40,7 +44,7 @@ export class Flight {
   // glides. The same pulse gives a small lift impulse; Space remains the
   // stronger, deliberate flap input for takeoff and climbing.
   const beatPhase=this.elapsed%2.65;
-  const surfaceHeight=this.map.surface(this.position.x,this.position.z);
+  const surfaceHeight=this.supportAt(this.position.x,this.position.z).h;
   const heightAboveSurface=Math.max(0,this.position.y-surfaceHeight);
   const autoFlap=this.flying&&!this.landing&&!forcedDive&&dive<.08&&heightAboveSurface>24&&beatPhase<1.2?Math.sin(Math.PI*beatPhase/1.2):0;
   if(this.landing&&climb>.35){this.landing=false;this.onEvent('landingCancel');}
@@ -59,11 +63,12 @@ export class Flight {
   this.vertical=THREE.MathUtils.lerp(this.vertical,desiredVertical,smoothing(2.5));
   this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));
   const airborneAtMove=this.flying;
-  const dx=this.forward.x*this.speed*dt*(this.flying?Math.max(.09,Math.cos(this.pitch)):1),dz=this.forward.z*this.speed*dt*(this.flying?Math.max(.09,Math.cos(this.pitch)):1),dy=this.vertical*dt;
+  this.carrierVelocity.multiplyScalar(Math.exp(-dt*1.5));
+  const dx=this.forward.x*this.speed*dt*(this.flying?Math.max(.09,Math.cos(this.pitch)):1)+(this.flying?this.carrierVelocity.x*dt:0),dz=this.forward.z*this.speed*dt*(this.flying?Math.max(.09,Math.cos(this.pitch)):1)+(this.flying?this.carrierVelocity.z*dt:0),dy=this.vertical*dt;
   // Sweep at 0.4 m resolution: fast flight cannot skip a narrow roof or facade.
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dy,dz)/.4)),sx=dx/steps,sy=dy/steps,sz=dz/steps;let perched=false;
   const nearbyBuilding=(x,z,atY=this.position.y)=>{
-   let nearest=this.map.buildingAt(x,z);
+   let nearest=this.map.buildingAt(x,z);const moving=this.map.dynamicAt?.(x,z);if(moving&&(!nearest||moving.h>nearest.h))nearest=moving;
    if(!nearest||nearest.h+BIRD_CLEARANCE<=atY)for(const [ox,oz] of [[BIRD_RADIUS,0],[-BIRD_RADIUS,0],[0,BIRD_RADIUS],[0,-BIRD_RADIUS]]){
     const b=this.map.buildingAt(x+ox,z+oz);if(b&&(!nearest||b.h>nearest.h))nearest=b;
    }
@@ -71,9 +76,9 @@ export class Flight {
   };
   for(let i=0;i<steps;i++){
    const px=this.position.x,pz=this.position.z,py=this.position.y,nx=px+sx,nz=pz+sz,ny=py+sy;
-   const centerSurface=this.map.surface(nx,nz);
+   const centerSurface=this.supportAt(nx,nz).h;
    if(this.flying&&sy<0&&ny<=centerSurface+BIRD_CLEARANCE&&py>=centerSurface+BIRD_CLEARANCE-.05&&(centerSurface>0||this.map.onLand(nx,nz))){
-    this.position.set(nx,centerSurface+BIRD_CLEARANCE,nz);this.flying=false;this.landing=false;this.speed=0;this.vertical=0;perched=true;this.onEvent('perch');break;
+    this.perchAt(nx,centerSurface+BIRD_CLEARANCE,nz);perched=true;break;
    }
    const wall=nearbyBuilding(nx,nz,ny);
    if(wall&&ny<wall.h+BIRD_CLEARANCE-.02){
@@ -83,14 +88,14 @@ export class Flight {
     this.speed*=Math.exp(-dt*3/steps);
    }else this.position.set(nx,ny,nz);
   }
-  const support=this.map.surface(this.position.x,this.position.z),land=this.map.onLand(this.position.x,this.position.z);
+  const supportHit=this.supportAt(this.position.x,this.position.z),support=supportHit.vehicle&&!carriedAtStart&&this.position.y<supportHit.h+BIRD_CLEARANCE-.2?this.map.surface(this.position.x,this.position.z):supportHit.h,land=this.map.onLand(this.position.x,this.position.z);
   if(!perched&&this.flying&&this.vertical<=0&&this.position.y<=support+BIRD_CLEARANCE&&(land||support>0)) {
-   if(this.previous.y>=support+BIRD_CLEARANCE-.18){this.position.y=support+BIRD_CLEARANCE;this.flying=false;this.landing=false;this.speed=0;this.vertical=0;this.onEvent('perch');}
+   if(this.previous.y>=support+BIRD_CLEARANCE-.18){this.perchAt(this.position.x,support+BIRD_CLEARANCE,this.position.z);}
   }
   if(!this.flying){
-   const prevSupport=this.map.surface(this.previous.x,this.previous.z);
-   if(!airborneAtMove&&((prevSupport>2&&support<prevSupport-2)||!land)){this.flying=true;this.speed=8;this.vertical=0;this.onEvent('takeoff');}
-   else this.position.y=support+BIRD_CLEARANCE;
+   const prevSupport=this.supportAt(this.previous.x,this.previous.z).h;
+   if(!airborneAtMove&&((carriedAtStart&&supportHit.vehicle!==carriedAtStart)||(prevSupport>2&&support<prevSupport-2)||!land)){this.detachVehicle();this.flying=true;this.speed=8;this.vertical=0;this.onEvent('takeoff');}
+   else {this.position.y=support+BIRD_CLEARANCE;this.vehicleSupport=supportHit.vehicle&&support===supportHit.h?supportHit.vehicle:null;}
   }
   if(this.position.y<4&&!land&&support===0){this.position.y=Math.max(2,this.position.y);this.vertical=Math.max(7,this.vertical);this.landing=false;}
   this.position.y=THREE.MathUtils.clamp(this.position.y,BIRD_CLEARANCE,650);
@@ -113,10 +118,10 @@ export class Flight {
   this.desiredCamera.set(this.position.x+Math.sin(camHeading)*armLength,this.position.y+cameraHeight+this.orbitPitch,this.position.z+Math.cos(camHeading)*armLength);
   // Shorten camera arm against buildings instead of looking through their walls.
   const arm=this.desiredCamera.clone().sub(this.position);
-  for(let i=1;i<=12;i++){const p=this.position.clone().addScaledVector(arm,i/12);if(this.map.surface(p.x,p.z)>p.y-.06){this.desiredCamera.copy(this.position).addScaledVector(arm,Math.max(.15,(i-1)/12));this.desiredCamera.y=this.position.y+Math.max(.65,cameraHeight);break;}}
+  for(let i=1;i<=12;i++){const p=this.position.clone().addScaledVector(arm,i/12);if(this.supportAt(p.x,p.z).h>p.y-.06){this.desiredCamera.copy(this.position).addScaledVector(arm,Math.max(.15,(i-1)/12));this.desiredCamera.y=this.position.y+Math.max(.65,cameraHeight);break;}}
   this.camera.position.lerp(this.desiredCamera,smoothing(FLIGHT.cameraLag));
   const cameraArm=this.camera.position.clone().sub(this.position);
-  for(let i=1;i<=16;i++){const p=this.position.clone().addScaledVector(cameraArm,i/16);if(this.map.surface(p.x,p.z)>p.y-.08){this.camera.position.copy(this.position).addScaledVector(cameraArm,Math.max(.12,(i-1)/16));this.camera.position.y=Math.max(this.camera.position.y,this.position.y+Math.max(.55,cameraHeight));break;}}
+  for(let i=1;i<=16;i++){const p=this.position.clone().addScaledVector(cameraArm,i/16);if(this.supportAt(p.x,p.z).h>p.y-.08){this.camera.position.copy(this.position).addScaledVector(cameraArm,Math.max(.12,(i-1)/16));this.camera.position.y=Math.max(this.camera.position.y,this.position.y+Math.max(.55,cameraHeight));break;}}
   this.look.copy(this.position).addScaledVector(this.forward,this.flying?(.3+this.speed*.001)*(1-diveView*.7):(this.compactView?0:2.5));this.look.y+=(this.flying?.06:(this.compactView?0:.48))-diveView*.35;this.cameraTarget.lerp(this.look,smoothing(this.flying?7:5));this.camera.lookAt(this.cameraTarget);
  }
 }
