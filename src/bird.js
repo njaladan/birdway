@@ -15,6 +15,10 @@ export function loadBirdModel(){
 export function makeBird(scale=1){
  if(!template)throw new Error('Load the pigeon rig before creating a bird.');
  const bird=new THREE.Group(),model=clone(template);bird.add(model);bird.scale.setScalar(scale);
+ // Throttled shadow draws advance Three's skeleton cache frame separately
+ // from the color pass. Refresh after scene transforms, just before drawing:
+ // otherwise the cached world-space bones can trail a moving bird by a frame.
+ model.traverse(o=>{if(o.isSkinnedMesh)o.onBeforeRender=()=>o.skeleton.update();});
  // Source is metres. GLTF already maps Blender +Y to the game's forward -Z.
  // A 35 cm body, roughly 60 cm wingspan, with feet 16 cm below the player origin.
  const size=new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()),factor=.35/size.z;

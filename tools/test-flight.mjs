@@ -55,6 +55,17 @@ assert.ok(footScreenY>-.8,'the bird remains visible above the lower HUD while wa
 // The rig plays an amplified Walk clip with an obvious leg cycle and body bob.
 globalThis.fetch=async()=>new Response(await readFile(new URL('../assets/pigeon/pigeon.glb',import.meta.url)));
 await loadBirdModel();const gaitBird=makeBird();gaitBird.position.set(0,0,0);gaitBird.userData.animate(.1,false,FLIGHT.walk,0);
+// A throttled shadow pass can leave cached bone matrices from the last frame.
+// The color draw must submit today's pose, even when renderer caching skips it.
+const renderBird=makeBird();let renderSkin;renderBird.traverse(o=>{if(o.isSkinnedMesh)renderSkin=o;});
+renderBird.updateMatrixWorld(true);renderSkin.skeleton.update();
+renderBird.position.set(1200,300,-1800);renderBird.rotation.set(.2,.6,-.1);renderBird.userData.animate(.1,true,35);
+renderBird.updateMatrixWorld(true);renderSkin.onBeforeRender();
+for(let i=0;i<renderSkin.skeleton.bones.length;i++){
+ const expected=new THREE.Matrix4().multiplyMatrices(renderSkin.skeleton.bones[i].matrixWorld,renderSkin.skeleton.boneInverses[i]);
+ const actual=new THREE.Matrix4().fromArray(renderSkin.skeleton.boneMatrices,i*16);
+ assert.ok(expected.elements.every((v,j)=>Math.abs(v-actual.elements[j])<.0002),'rendered bones must follow the current bird position and pose');
+}
 const model=gaitBird.children[0],leftLeg=model.getObjectByName('left-upper-leg-bone'),rightLeg=model.getObjectByName('right-upper-leg-bone'),leftKnee=model.getObjectByName('left-lower-leg-bone'),rightKnee=model.getObjectByName('right-lower-leg-bone'),firstLeg=leftLeg.quaternion.clone(),firstBob=model.position.y;
 gaitBird.userData.animate(.2,false,FLIGHT.walk,0);
 assert.equal(gaitBird.userData.animationName,'Walk');assert.ok(gaitBird.userData.walkPhase>0);
