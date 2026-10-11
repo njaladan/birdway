@@ -8,10 +8,11 @@ const SURFACE_COLORS={asphalt:0xaaa89b,concrete:0xbcb9a9,paving_stones:0xc4bda9,
 const chunkKey=(x,z)=>`${Math.floor(x/1600)},${Math.floor(z/1600)}`;
 
 export async function loadParks(){
- await Promise.all([loadTrees(),loadGroundTextures()]);
- const response=await fetch('./data/parks.json');
+ const [, , response, treeResponse]=await Promise.all([loadTrees(),loadGroundTextures(),fetch('./data/parks.json'),fetch('./data/street-trees.json')]);
  if(!response.ok)throw new Error('The park and path data could not load. Serve the birdway folder over HTTP.');
- return response.json();
+ const data=await response.json();
+ if(treeResponse.ok){const census=await treeResponse.json();data.streetTrees=census.trees;data.streetTreeSource=census.source;}
+ return data;
 }
 
 function groundKind(surface,kind='',name=''){
@@ -77,5 +78,5 @@ function addMergedLayers(scene,data){
 
 export function buildParkWorld(scene,data,map=null){
  const root=addMergedLayers(scene,data),trees=buildTrees(scene,data),grass=createGrassDetail(scene,data,map);
- return {root,update(position,time){trees.update(position,time);grass.update(position);}};
+ return {root,update(position,time){trees.update(position,time);grass.update(position,time);}};
 }

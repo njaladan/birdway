@@ -3,6 +3,8 @@ import {geo} from './geography.js';
 import {createFacadeMaterial,facadeStyle} from './facades.js';
 import {makeGroundMaterial} from './ground.js';
 import {buildWorldTradeCenter} from './landmarks.js';
+import {addRooftopWaterTowers} from './street-details.js';
+import {buildCityLOD} from './city-lod.js';
 export const rand=(n)=>{const r=Math.sin(n*127.1+311.7)*43758.5453;return r-Math.floor(r);};
 export function mesh(parent,geometry,color,x=0,y=0,z=0) {const m=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color,roughness:.8}));m.position.set(x,y,z);parent.add(m);return m;}
 export function box(parent,color,x,y,z,w,h,d) {return mesh(parent,new THREE.BoxGeometry(w,h,d),color,x,y,z);}
@@ -70,12 +72,15 @@ export async function buildCity(scene,map,progress) {
   for(const face of THREE.ShapeUtils.triangulateShape(contours[0],contours.slice(1)))for(const i of [...face].reverse())push(flat[i][0],b.h,flat[i][1],0,1,0,(flat[i][0]-b.cx)/3,(flat[i][1]-b.cz)/3,true);
   if(index%3500===0){progress?.(index/map.buildings.length);await new Promise(r=>setTimeout(r,0));}
  }
- for(const c of chunks.values()) {const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(c.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(c.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(c.uv,2));g.setAttribute('color',new THREE.Float32BufferAttribute(c.c,3));g.setAttribute('facadeKind',new THREE.Float32BufferAttribute(c.f,1));g.computeBoundingSphere();root.add(new THREE.Mesh(g,mat));}
+ const detailed=new Map();
+ for(const [key,c] of chunks) {const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(c.p,3));g.setAttribute('normal',new THREE.Float32BufferAttribute(c.n,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(c.uv,2));g.setAttribute('color',new THREE.Float32BufferAttribute(c.c,3));g.setAttribute('facadeKind',new THREE.Float32BufferAttribute(c.f,1));g.computeBoundingSphere();const m=new THREE.Mesh(g,mat);root.add(m);detailed.set(key,m);}
+ const lod=buildCityLOD(root,map,detailed);
  // Roof equipment and raised cornices add scale without individual draw calls.
- const roofs=map.buildings.filter(b=>!b.detail&&b.h>10&&b.x1-b.x0>8&&b.z1-b.z0>8&&b.special!=='wtc');
+ const waterTowerBuildings=addRooftopWaterTowers(root,map);
+ const roofs=map.buildings.filter(b=>!b.detail&&b.h>10&&b.x1-b.x0>8&&b.z1-b.z0>8&&b.special!=='wtc'&&!waterTowerBuildings.has(b.id));
  const units=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:0x7f8989,roughness:.9}),roofs.length);
  const dummy=new THREE.Object3D();
  roofs.forEach((b,i)=>{dummy.position.set(b.cx,b.h+1.1,b.cz);dummy.scale.set(Math.min(6,(b.x1-b.x0)*.2),2.2,Math.min(5,(b.z1-b.z0)*.2));dummy.rotation.y=rand(i)*Math.PI;dummy.updateMatrix();units.setMatrixAt(i,dummy.matrix);});root.add(units);
  if(wtcBuilding)buildWorldTradeCenter(root,wtcBuilding,mat);
- return {root,night,chunks:chunks.size};
+ return {root,night,chunks:chunks.size,update:lod.update,lod:lod.records};
 }
