@@ -24,18 +24,21 @@ void main(){vec3 d=normalize(direction);float h=max(d.y,0.);vec3 c=mix(horizon,t
  // first, or its distant sphere erases water, roads and parks afterward.
  sky.renderOrder=-120;sky.material.depthTest=false;scene.add(sky);
  const sunLight=new THREE.DirectionalLight(0xffe2b8,2.3);scene.add(sunLight);scene.add(sunLight.target);
- sunLight.castShadow=true;sunLight.shadow.mapSize.set(1024,1024);sunLight.shadow.camera.left=sunLight.shadow.camera.bottom=-160;sunLight.shadow.camera.right=sunLight.shadow.camera.top=160;sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=1800;sunLight.shadow.normalBias=.45;sunLight.shadow.bias=-.00015;
+ sunLight.castShadow=true;sunLight.shadow.mapSize.set(768,768);sunLight.shadow.autoUpdate=false;sunLight.shadow.camera.left=sunLight.shadow.camera.bottom=-160;sunLight.shadow.camera.right=sunLight.shadow.camera.top=160;sunLight.shadow.camera.near=1;sunLight.shadow.camera.far=1800;sunLight.shadow.normalBias=.45;sunLight.shadow.bias=-.00015;
+ let lastShadow=-Infinity,lastShadowHours=-Infinity;
  const hemi=new THREE.HemisphereLight(0xe3f1ed,0x75796b,1.25);scene.add(hemi);
  const water=makeWater(scene);
  const starsGeo=new THREE.BufferGeometry(),points=[];for(let i=0;i<450;i++){const theta=rand(i+1000)*Math.PI*2,y=rand(i+1500)*.9+.1,r=Math.sqrt(1-y*y);points.push(Math.cos(theta)*r*11000,y*11000,Math.sin(theta)*r*11000);}starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));const starMat=new THREE.PointsMaterial({color:0xf5eee4,size:9,transparent:true,opacity:0,depthWrite:false});const stars=new THREE.Points(starsGeo,starMat);scene.add(stars);
- const topDay=new THREE.Color(0x77aebd),topDusk=new THREE.Color(0x717c9f),topNight=new THREE.Color(0x111e37);
- const dayHorizon=new THREE.Color(0xd1dac8),duskHorizon=new THREE.Color(0xefb08a),nightHorizon=new THREE.Color(0x394954);
- scene.fog=new THREE.FogExp2(0xd1dac8,.00016);
+ const topDay=new THREE.Color(0x83a9d5),topDusk=new THREE.Color(0x717c9f),topNight=new THREE.Color(0x111e37);
+ const dayHorizon=new THREE.Color(0xd1deea),duskHorizon=new THREE.Color(0xefb08a),nightHorizon=new THREE.Color(0x394954);
+ scene.fog=new THREE.FogExp2(0xd1deea,.00012);
  function update(hours,elapsed,position) {
   const angle=(hours-6)/24*Math.PI*2,alt=Math.sin(angle),night=1-THREE.MathUtils.smoothstep(alt,-.15,.2),dusk=1-THREE.MathUtils.smoothstep(Math.abs(alt),.05,.48);
   uniforms.time.value=elapsed;
   uniforms.sun.value.set(Math.cos(angle),alt,-.35);uniforms.top.value.copy(topDay).lerp(topDusk,dusk*.6).lerp(topNight,night);uniforms.horizon.value.copy(dayHorizon).lerp(duskHorizon,dusk).lerp(nightHorizon,night);uniforms.sunColor.value.set(0xffd1a0).multiplyScalar(1-night);uniforms.night.value=night;
   sunLight.target.position.copy(position);sunLight.position.copy(uniforms.sun.value).normalize().multiplyScalar(800).add(position);sunLight.intensity=(.45+Math.max(0,alt)*2.7)*(1-night);sunLight.color.set(dusk>.4?0xffd2a6:0xffefd9);
+  // Sun/foliage shadows need not redraw the surveyed city at display frequency.
+  if(elapsed-lastShadow>=.125||Math.abs(hours-lastShadowHours)>.05){sunLight.shadow.needsUpdate=true;lastShadow=elapsed;lastShadowHours=hours;}
   // Cool skylight keeps brick, glass and stone distinct while the sun turns warm.
   hemi.intensity=1.25-night*.65;hemi.color.set(0xddeaf3).lerp(new THREE.Color(0x657a9f),night);hemi.groundColor.set(0x74776e).lerp(new THREE.Color(0x323c4c),night);
   scene.fog.color.copy(uniforms.horizon.value);water.update({time:elapsed,night,sun:uniforms.sun.value,top:uniforms.top.value,horizon:uniforms.horizon.value});starMat.opacity=night*.7;

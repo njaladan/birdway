@@ -19,7 +19,7 @@ export function makeEnvironment(renderer,scene,sky){
  return {update(hours){
   const interval=Math.round(hours*4);
   if(interval===last)return;last=interval;
-  const next=generator.fromScene(stage,0,.1,80);
+  const next=generator.fromScene(stage,0,.1,80,{size:128});
   scene.environment=next.texture;scene.environmentIntensity=.55;
   target?.dispose();target=next;
  }};
