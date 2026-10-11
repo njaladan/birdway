@@ -28,10 +28,12 @@ void main(){vec3 d=normalize(direction);float h=max(d.y,0.);vec3 c=mix(horizon,t
  let lastShadow=-Infinity,lastShadowHours=-Infinity;
  const hemi=new THREE.HemisphereLight(0xe3f1ed,0x75796b,1.25);scene.add(hemi);
  const water=makeWater(scene);
- const starsGeo=new THREE.BufferGeometry(),points=[];for(let i=0;i<450;i++){const theta=rand(i+1000)*Math.PI*2,y=rand(i+1500)*.9+.1,r=Math.sqrt(1-y*y);points.push(Math.cos(theta)*r*11000,y*11000,Math.sin(theta)*r*11000);}starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));const starMat=new THREE.PointsMaterial({color:0xf5eee4,size:9,transparent:true,opacity:0,depthWrite:false});const stars=new THREE.Points(starsGeo,starMat);scene.add(stars);
+ const starsGeo=new THREE.BufferGeometry(),points=[];for(let i=0;i<450;i++){const theta=rand(i+1000)*Math.PI*2,y=rand(i+1500)*.9+.1,r=Math.sqrt(1-y*y);points.push(Math.cos(theta)*r*11000,y*11000,Math.sin(theta)*r*11000);}starsGeo.setAttribute('position',new THREE.Float32BufferAttribute(points,3));const starMat=new THREE.PointsMaterial({color:0xf5eee4,size:9,transparent:true,opacity:0,depthWrite:false,fog:false});const stars=new THREE.Points(starsGeo,starMat);scene.add(stars);
  const topDay=new THREE.Color(0x83a9d5),topDusk=new THREE.Color(0x717c9f),topNight=new THREE.Color(0x111e37);
  const dayHorizon=new THREE.Color(0xd1deea),duskHorizon=new THREE.Color(0xefb08a),nightHorizon=new THREE.Color(0x394954);
- scene.fog=new THREE.FogExp2(0xd1deea,.00012);
+ // Exponential depth haze preserves close details while distant blocks lose
+ // contrast and blend into the sky. Reuse built-in fog, including on water.
+ scene.fog=new THREE.FogExp2(0xd1deea,.00022);
  function update(hours,elapsed,position) {
   const angle=(hours-6)/24*Math.PI*2,alt=Math.sin(angle),night=1-THREE.MathUtils.smoothstep(alt,-.15,.2),dusk=1-THREE.MathUtils.smoothstep(Math.abs(alt),.05,.48);
   uniforms.time.value=elapsed;
@@ -41,6 +43,11 @@ void main(){vec3 d=normalize(direction);float h=max(d.y,0.);vec3 c=mix(horizon,t
   if(elapsed-lastShadow>=.125||Math.abs(hours-lastShadowHours)>.05){sunLight.shadow.needsUpdate=true;lastShadow=elapsed;lastShadowHours=hours;}
   // Cool skylight keeps brick, glass and stone distinct while the sun turns warm.
   hemi.intensity=1.25-night*.65;hemi.color.set(0xddeaf3).lerp(new THREE.Color(0x657a9f),night);hemi.groundColor.set(0x74776e).lerp(new THREE.Color(0x323c4c),night);
+  // Warmer, denser air at twilight; clearer silhouettes at night and above
+  // the lower atmosphere. Stars belong to the sky, outside this local haze.
+  const hazeDensity=THREE.MathUtils.lerp(.00022+dusk*.00006,.00014,night);
+  const altitudeFade=1-.28*THREE.MathUtils.smoothstep(position.y,120,1400);
+  scene.fog.density=hazeDensity*altitudeFade;
   scene.fog.color.copy(uniforms.horizon.value);water.update({time:elapsed,night,sun:uniforms.sun.value,top:uniforms.top.value,horizon:uniforms.horizon.value});starMat.opacity=night*.7;
   sky.position.copy(position);stars.position.copy(position);
   return {night,dusk};
