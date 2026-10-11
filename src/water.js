@@ -1,8 +1,9 @@
 import * as THREE from '../vendor/three.module.js';
 import {attachWaterReflection} from './water-reflection.js';
+import {makeCoastTexture} from './water-coast.js';
 
-// A broad, shallow-water surface for the river. The shader uses analytic
-// directional waves, so it needs no reflection pass or extra render target.
+// Directional chop, tidal color bands and coast shading share a single surface.
+// High quality can add the capped reflection pass; the default uses sky lighting.
 export function makeWater(scene) {
  const uniforms={
   time:{value:0},night:{value:0},dusk:{value:0},
@@ -11,8 +12,11 @@ export function makeWater(scene) {
   ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
   reflectionMatrix:{value:new THREE.Matrix4()},reflectionMap:{value:null},reflectionStrength:{value:0},
   rippleMap:{value:new THREE.DataTexture(new Uint8Array([128,128,255,255]),1,1)},
+  coastMap:{value:new THREE.DataTexture(new Uint8Array([255,0,0,255]),1,1)},
+  coastBounds:{value:new THREE.Vector4(-9000,-10000,18000,18000)},
  };
  uniforms.rippleMap.value.needsUpdate=true;
+ uniforms.coastMap.value.needsUpdate=true;
  if(typeof document!=='undefined')new THREE.TextureLoader().load('./assets/ground/water-normal.jpg',texture=>{
   texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=4;uniforms.rippleMap.value=texture;
  });
@@ -34,6 +38,8 @@ export function makeWater(scene) {
  uniform vec3 sun,top,horizon;
  uniform sampler2D reflectionMap;
  uniform sampler2D rippleMap;
+ uniform sampler2D coastMap;
+ uniform vec4 coastBounds;
  uniform float reflectionStrength;
  #include <logdepthbuf_pars_fragment>
  #include <fog_pars_fragment>
@@ -66,11 +72,18 @@ export function makeWater(scene) {
  void main(){
   #include <logdepthbuf_fragment>
   vec2 p=vWorld.xz;
+  vec2 coastUv=(p-coastBounds.xy)/coastBounds.zw;
+  float shoreDistance=texture2D(coastMap,coastUv).r*600.;
+  float sheltered=1.-smoothstep(25.,190.,shoreDistance);
+  vec2 flow=vec2(time*.10,-time*.055);
+  float tidal=noise((p+flow)*.0024)*.62+noise((p+flow)*.0081+13.7)*.38;
+  float currentBand=smoothstep(.25,.77,tidal);
   vec3 V=normalize(cameraPosition-vWorld),L=normalize(sun);
   float groundDistance=length(cameraPosition.xz-vWorld.xz);
   float distanceFade=1.-smoothstep(1800.,9000.,groundDistance);
   float nearWindFade=1.-smoothstep(120.,600.,groundDistance);
   vec2 slope=waveNormal(p,distanceFade*nearWindFade);
+  slope*=mix(.68,1.32,currentBand)*(1.-sheltered*.22);
   vec2 rippleUv=p*.085;
   vec2 photographic=(texture2D(rippleMap,rippleUv+vec2(time*.007,-time*.004)).xy
    +texture2D(rippleMap,rippleUv.yx*.71+vec2(-time*.005,time*.003)).yx-1.)*.15;
@@ -83,8 +96,20 @@ export function makeWater(scene) {
   vec3 R=reflect(-V,N);
   float skyHeight=smoothstep(-.18,.58,R.y);
   vec3 reflected=mix(horizon,top,pow(skyHeight,.72));
+  // Reflect the drifting cloud layer as well as the sky gradient. Changes
+  // in wave normals break the cloud reflection into broad moving patches.
+  vec2 cp=R.xz/max(.16,R.y+.36)*1.65+vec2(time*.0018,-time*.0007);
+  float cloudField=noise(cp)*.55+noise(cp*2.03+vec2(13.1,7.7))*.275;
+  float cloudCover=smoothstep(.38,.64,cloudField)*smoothstep(-.12,.12,R.y)*(1.-smoothstep(.58,.92,R.y));
+  vec3 cloudTint=mix(horizon,vec3(1.,.94,.84),.48+max(R.y,0.)*.18);
+  reflected=mix(reflected,cloudTint,cloudCover*(.25+.35*(1.-night)));
   float skyLuma=dot(reflected,vec3(.299,.587,.114));
   reflected=mix(reflected,vec3(skyLuma*.82,skyLuma*.91,skyLuma*.86),.38);
+  // Slowly moving wind/current lanes change reflected brightness on a broad
+  // scale. They remain visible where grazing Fresnel hides the water body.
+  float cloudShade=noise(p*.0012+vec2(time*.0006,-time*.0003));
+  reflected*=.70+currentBand*.25+cloudShade*.16;
+  reflected=mix(reflected,reflected*vec3(.63,.70,.64),sheltered*.58);
   float sunDisk=pow(max(dot(R,L),0.),180.);
   reflected+=vec3(1.,.77,.48)*sunDisk*(.65*(1.-night)+.13);
   // Sample the actual mirrored skyline, softly distorted by directional chop.
@@ -96,8 +121,9 @@ export function makeWater(scene) {
   vec3 skyline=texture2D(reflectionMap,clamp(sampleUv,vec2(.002),vec2(.998))).rgb;
   reflected=mix(reflected,skyline,valid*.92);
   // The tidal Hudson is dark olive/brown underneath its reflected sky.
-  float sediment=noise(p*.007+vec2(time*.0009,0.));
-  vec3 deep=mix(vec3(.036,.058,.042),vec3(.016,.034,.025),sediment);
+  vec3 deep=mix(vec3(.012,.047,.041),vec3(.074,.089,.039),tidal);
+  deep=mix(deep,vec3(.087,.073,.041),sheltered*.48);
+  deep*=1.-(1.-smoothstep(0.,45.,shoreDistance))*.45;
   deep=mix(deep,vec3(.006,.013,.017),night);
   vec3 water=mix(deep,reflected,clamp(fresnel+.12,0.,.97));
   // Broad sun path follows the actual sun azimuth and is broken up by waves.
@@ -128,5 +154,6 @@ export function makeWater(scene) {
   if(horizon)uniforms.horizon.value.copy(horizon);
   uniforms.dusk.value=THREE.MathUtils.clamp((1-night)*Math.max(0,1-Math.abs(uniforms.sun.value.y)*3),0,1);
  }
- return {update,mesh,material,reflection};
+ function setGeography(land){const coast=makeCoastTexture(land);uniforms.coastMap.value.dispose();uniforms.coastMap.value=coast.texture;uniforms.coastBounds.value.copy(coast.bounds);}
+ return {update,setGeography,mesh,material,reflection};
 }

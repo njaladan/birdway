@@ -11,8 +11,9 @@ import {loadParks} from './parks.js';
 import {makeEnvironment} from './environment.js';
 import {loadFacadeTextures} from './facades.js';
 import {buildWaterfront} from './waterfront.js';
+import {makeBoats} from './boats.js';
 const $=id=>document.getElementById(id);
-let renderer,scene,camera,map,city,sky,environment,waterfront,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio(),qualityMode='balanced',perfWindow=0,perfFrames=0,slowFrames=0,fastWindows=0;
+let renderer,scene,camera,map,city,sky,environment,waterfront,boats,flight,nest,started=false,paused=false,elapsed=0,hours=17.55,autoTime=true,dayLength=24,last=0,life,ui,audio=new AmbientAudio(),qualityMode='balanced',perfWindow=0,perfFrames=0,slowFrames=0,fastWindows=0;
 const toast=(message)=>{ $('toast').textContent=message;$('toast').classList.add('show');clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').classList.remove('show'),4200);};
 async function boot(){
  try{
@@ -20,7 +21,7 @@ async function boot(){
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.25));renderer.setSize(innerWidth,innerHeight);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.05;renderer.userData={waterReflections:false};
   renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.08,16000);sky=makeSky(scene);environment=makeEnvironment(renderer,scene,sky);
-  $('loading-progress').style.width='10%';map=await loadGeography();await loadBirdModel();$('loading-note').textContent='Opening 20,868 windows onto Manhattan…';
+  $('loading-progress').style.width='10%';map=await loadGeography();sky.setGeography(map.land);boats=makeBoats(scene,map);await loadBirdModel();$('loading-note').textContent='Opening 20,868 windows onto Manhattan…';
   const [parkData]=await Promise.all([loadParks(),loadFacadeTextures()]);
   city=await buildCity(scene,map,p=>$('loading-progress').style.width=`${15+p*65}%`);
   city.root.traverse(o=>{if(o.isMesh){o.receiveShadow=true;if(o.userData.distant)o.castShadow=false;else if(o.material.depthWrite!==false)o.castShadow=true;}});
@@ -106,6 +107,7 @@ function frame(time){requestAnimationFrame(frame);const frameSeconds=(time-last)
  }
  if(started&&!paused){elapsed+=dt;if(autoTime)hours=(hours+dt*24/(dayLength*60))%24;flight.update(dt);life.update(dt);life.save.hours=hours;}
  const light=sky.update(hours,elapsed,flight.position);city.night.value=light.night;environment.update(hours);city.update(flight.position,renderer.getPixelRatio());waterfront.update(flight.position,light.night);
+ boats.update(started&&!paused?dt:0,flight.position,light.night);
  renderer.render(scene,camera);
  
  if(started){$('mode').textContent=flight.flying?(flight.landing?'COMING TO REST':'ON THE BREEZE'):'A LITTLE WADDLE';$('altitude').textContent=`${Math.round(flight.position.y)} m`;const hh=Math.floor(hours),mm=Math.floor((hours-hh)*60);$('clock').textContent=`${hh%12||12}:${String(mm).padStart(2,'0')} ${hh>=12?'PM':'AM'}`;ui.update();if(Math.floor(time/150)!==frame.mapTick){frame.mapTick=Math.floor(time/150);drawMinimap();ui.mapMarkers($('minimap'),.095,flight.position);}}

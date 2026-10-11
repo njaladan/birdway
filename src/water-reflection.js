@@ -17,7 +17,7 @@ export function attachWaterReflection(mesh, uniforms) {
  let last = -Infinity, drawing = false;
  mesh.onBeforeRender = (renderer, scene, source) => {
   // Only High quality adds a city pass; other modes keep sky reflection.
-  if (drawing || !renderer.userData.waterReflections || source.position.y <= mesh.position.y) {
+  if (drawing || !renderer.userData?.waterReflections || source.position.y <= mesh.position.y) {
    if (!drawing) uniforms.reflectionStrength.value = 0;
    return;
   }

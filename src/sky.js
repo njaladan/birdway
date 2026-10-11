@@ -45,5 +45,5 @@ void main(){vec3 d=normalize(direction);float h=max(d.y,0.);vec3 c=mix(horizon,t
   sky.position.copy(position);stars.position.copy(position);
   return {night,dusk};
  }
- return {update,uniforms};
+ return {update,uniforms,setGeography:water.setGeography};
 }
