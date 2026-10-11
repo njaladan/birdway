@@ -29,16 +29,23 @@ export function makeGroundMaterial({detail=false}={}){
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
   vec2 gp=vGroundPosition;
   float groundDistance=distance(gp,cameraPosition.xz);
-  if(groundDistance<220.){
-  float broad=filteredNoise(gp,0.028),middle=filteredNoise(gp,0.19),grain=filteredNoise(gp,1.35);
+  float turfDetail=0.;
   if(vGroundKind<0.5){
-    vec3 turf=vec3(.91,.96,.84)+broad*.10+middle*.045+grain*.018;
-    float fleck=filteredNoise(gp+17.3,4.1);turf+=fleck*.008;
-    // Photographed turf is the base albedo, rather than a second green tint.
-    // Broad patches break tiling; mipmaps filter the physical 2 m repeat.
-    vec3 photo=texture2D(uGroundGrass,gp*.5).rgb;
-    diffuseColor.rgb=mix(diffuseColor.rgb,photo,.88)*turf*(.96+broad*.08);
-  }else if(vGroundKind<1.5){
+    // Keep the lawn palette at every mip/resolution. The photograph contains
+    // bare soil: use its luminance for texture, never its brown chroma.
+    if(groundDistance<220.){
+    float broad=filteredNoise(gp,.028),middle=filteredNoise(gp,.19);
+    float nearTurf=1.-smoothstep(80.,220.,groundDistance);
+    turfDetail=nearTurf*(1.-smoothstep(.08,.5,max(length(dFdx(gp*.5)),length(dFdy(gp*.5)))));
+    diffuseColor.rgb*=1.+(broad*.075+middle*.035)*nearTurf;
+    if(turfDetail>0.){
+     float photoLight=dot(texture2D(uGroundGrass,gp*.5).rgb,vec3(.2126,.7152,.0722));
+     float textureShade=clamp(.78+photoLight*1.35,.82,1.13);
+     float grain=filteredNoise(gp,4.1);
+     diffuseColor.rgb*=mix(1.,textureShade+grain*.025,turfDetail);
+    }}
+  }else if(groundDistance<220.){
+  if(vGroundKind<1.5){
     bool batteryPavers=vGroundKind<1.05&&gp.x < -1000.&&gp.y > 150.;
     float joint;
     if(batteryPavers){float edge=hexPaverEdge(gp,.18),pixel=max(fwidth(gp.x),fwidth(gp.y));joint=(1.-smoothstep(.008,.008+pixel*.7,edge))*(1.-smoothstep(.035,.16,pixel));}
@@ -53,16 +60,17 @@ export function makeGroundMaterial({detail=false}={}){
     float soil=filteredNoise(gp,.16)*.055+filteredNoise(gp,1.1)*.018;vec3 photo=texture2D(uGroundSoil,gp*.25).rgb;
     diffuseColor.rgb*=(vec3(.98,.94,.84)+soil)*mix(vec3(1.),photo,.52);
   }
-  }else{diffuseColor.rgb*=vGroundKind<.5?vec3(.70,.80,.57):vec3(.88);}`);
+  }else{diffuseColor.rgb*=vec3(.88);}`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>',`#include <roughnessmap_fragment>
-  if(groundDistance<220.&&vGroundKind<.5)roughnessFactor=clamp(texture2D(uGroundGrassRoughness,vGroundPosition*.5).r,.72,1.);
+  if(vGroundKind<.5&&turfDetail>0.)roughnessFactor=mix(1.,clamp(texture2D(uGroundGrassRoughness,vGroundPosition*.5).r,.82,1.),turfDetail);
   roughnessFactor=mix(roughnessFactor,.82,step(.5,vGroundKind)*step(vGroundKind,1.5));
   roughnessFactor=mix(roughnessFactor,.92,step(1.5,vGroundKind)*step(vGroundKind,2.5));
   roughnessFactor=mix(roughnessFactor,1.,step(2.5,vGroundKind));`);
   shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
   if(groundDistance<140.){
-  float groundRelief=filteredNoise(vGroundPosition,vGroundKind<.5?2.8:1.8)*(vGroundKind<.5?.018:.035);
-  if(vGroundKind<.5)groundRelief+=(texture2D(uGroundGrassHeight,vGroundPosition*.5).r-.5)*.025;
+  float reliefFade=vGroundKind<.5?1.-smoothstep(60.,140.,groundDistance):1.;
+  float groundRelief=filteredNoise(vGroundPosition,vGroundKind<.5?2.8:1.8)*(vGroundKind<.5?.008:.035)*reliefFade;
+  if(vGroundKind<.5)groundRelief+=(texture2D(uGroundGrassHeight,vGroundPosition*.5).r-.5)*.012*reliefFade;
   vec3 gx=normalize(dFdx(-vViewPosition)),gy=normalize(dFdy(-vViewPosition));
   vec3 gr1=cross(gy,normal),gr2=cross(normal,gx);float gd=dot(gx,gr1)*faceDirection;
   normal=normalize(abs(gd)*normal-sign(gd)*(dFdx(groundRelief)*gr1+dFdy(groundRelief)*gr2));
@@ -72,23 +80,23 @@ export function makeGroundMaterial({detail=false}={}){
    vec3 worldNormal=normalize(vec3(mapNormal.x*.48,max(.25,mapNormal.z),mapNormal.y*.48));
    vec3 grassNormal=normalize(mat3(viewMatrix)*worldNormal);
    float normalDetail=1.-smoothstep(.06,.4,max(length(dFdx(guv)),length(dFdy(guv))));
-   normal=normalize(mix(normal,grassNormal,normalDetail*.72));
+   normal=normalize(mix(normal,grassNormal,normalDetail*.42*reliefFade));
   }} `);
  };
- material.customProgramCacheKey=()=>`ground-pbr-v3-${detail?'detail':'base'}`;
+ material.customProgramCacheKey=()=>`ground-green-turf-v4-${detail?'detail':'base'}`;
  return material;
 }
 
-const TILE=16,SPACING=.30,DETAIL_RADIUS=24;
+const TILE=8,SPACING=.08,SPARSE_SPACING=.24,DENSE_RADIUS=8,DETAIL_RADIUS=18;
 function insideRing(x,z,ring){let inside=false;for(let i=0,j=ring.length-1;i<ring.length;j=i++){
  const a=ring[i],b=ring[j];if(((a[1]>z)!==(b[1]>z))&&x<(b[0]-a[0])*(z-a[1])/(b[1]-a[1])+a[0])inside=!inside;
  }return inside;}
 function nearSegment(x,z,a,b,r){const dx=b[0]-a[0],dz=b[1]-a[1],l=dx*dx+dz*dz,t=l?THREE.MathUtils.clamp(((x-a[0])*dx+(z-a[1])*dz)/l,0,1):0;return Math.hypot(x-a[0]-dx*t,z-a[1]-dz*t)<r;}
 function hash(x,z){let n=Math.sin(x*127.1+z*311.7)*43758.5453;return n-Math.floor(n);}
 
-// Clumps are built as one mesh per nearby 16 m tile. Each candidate is
-// accepted only within a mapped grass polygon, outside holes, and clear of OSM
-// paths. No detail meshes are allocated beyond the moving bird's local area.
+// Two instanced rings keep 8 cm clumps close to the bird and sparse blades
+// farther away. Tile buffers store only roots and rotation/scales, not copies
+// of every blade vertex. Mapped holes, paths and buildings remain clear.
 export function createGrassDetail(scene,data,map=null){
  const grass=[];
  for(const park of data.parks||[]){
@@ -106,76 +114,135 @@ export function createGrassDetail(scene,data,map=null){
   for(let tx=minX;tx<=maxX;tx++)for(let tz=minZ;tz<=maxZ;tz++)indexPath(tx,tz,seg);
  }}
  const root=new THREE.Group();root.name='Near-field grass';scene.add(root);const live=new Map();
- // Curved, tapered blades catch backlight. The merged local tiles share a
- // shader and time uniform, so wind does not rebuild geometry every frame.
- const bladePositions=[],bladeColors=[];
- for(let blade=0;blade<3;blade++){
-  const angle=blade*Math.PI*2/3,cs=Math.cos(angle),sn=Math.sin(angle);
-  const bend=.045+(blade%2)*.02,height=.12+blade*.02,width=.024;
-  const rows=Array.from({length:4},(_,i)=>{
-   const t=i/3,half=width*(1.-t)*.5;
-   const center=[cs*bend*t*t,height*t,sn*bend*t*t];
-   return [[center[0]-sn*half,center[1],center[2]+cs*half],[center[0]+sn*half,center[1],center[2]-cs*half]];
-  });
-  for(let segment=0;segment<3;segment++)for(const [r,side] of [[segment,0],[segment,1],[segment+1,0],[segment,1],[segment+1,1],[segment+1,0]]){
-   bladePositions.push(...rows[r][side]);const t=r/3;bladeColors.push(.045+t*.042,.105+t*.072,.016+t*.020);
-  }
- }
- const bladeGeometry=new THREE.BufferGeometry();bladeGeometry.setAttribute('position',new THREE.Float32BufferAttribute(bladePositions,3));bladeGeometry.setAttribute('color',new THREE.Float32BufferAttribute(bladeColors,3));
- const grassTime={value:0},birdPosition={value:new THREE.Vector2()};
- const material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.94,side:THREE.DoubleSide});
- material.onBeforeCompile=shader=>{
-  shader.uniforms.uGrassBird=birdPosition;shader.uniforms.uGrassTime=grassTime;
-  shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nvarying vec2 vGrassPosition;uniform float uGrassTime;');
-  shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
-   vGrassPosition=transformed.xz;
-   float phase=transformed.x*.37+transformed.z*.29+uGrassTime*1.8;
-   float bend=transformed.y*transformed.y;
-   transformed.x+=sin(phase)*bend*.65;transformed.z+=cos(phase*.83)*bend*.38;`);
-  shader.fragmentShader=shader.fragmentShader.replace('#include <common>','#include <common>\nuniform vec2 uGrassBird;varying vec2 vGrassPosition;');
-  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>',`#include <color_fragment>
-   float d=distance(vGrassPosition,uGrassBird);
-   float fade=1.-smoothstep(17.,24.,d);
-   // Stable stochastic edge coverage fades the tile fringe without blending.
-   float coverage=fract(sin(dot(floor(gl_FragCoord.xy),vec2(12.9898,78.233)))*43758.5453);
-   if(coverage>fade)discard;`);
-  shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-   // A little transmission through thin blades avoids black back faces.
-   totalEmissiveRadiance+=diffuseColor.rgb*.22;`);
- };
- material.customProgramCacheKey=()=> 'curved-grass-wind-v3';
- function build(tx,tz){
-  const minX=tx*TILE,minZ=tz*TILE,maxX=minX+TILE,maxZ=minZ+TILE;
-  const candidates=grass.filter(p=>p.maxX>=minX&&p.minX<=maxX&&p.maxZ>=minZ&&p.minZ<=maxZ);if(!candidates.length)return null;
-  const positions=[],colors=[];const paths=pathsByTile.get(`${tx},${tz}`)||[];let seed=0;
-  for(let z=Math.ceil(minZ/SPACING)*SPACING;z<maxZ;z+=SPACING)for(let x=Math.ceil(minX/SPACING)*SPACING;x<maxX;x+=SPACING){
-   const jx=(hash(x,z)-.5)*SPACING*.9,jz=(hash(x+41,z-13)-.5)*SPACING*.9,px=x+jx,pz=z+jz;
-   if(!candidates.some(p=>px>=p.minX&&px<=p.maxX&&pz>=p.minZ&&pz<=p.maxZ&&insideRing(px,pz,p.rings[0])&&!p.rings.slice(1).some(h=>insideRing(px,pz,h))))continue;
-   if(map?.buildingAt?.(px,pz))continue;
-   if(paths.some(([a,b])=>nearSegment(px,pz,a,b,3.)))continue;
-   const h=.42+hash(px+7,pz+19)*.55,w=.65+hash(px-8,pz+4)*.55,angle=hash(px+5,pz-7)*Math.PI*2,c=Math.cos(angle),s=Math.sin(angle);
-   for(let v=0;v<bladeGeometry.attributes.position.count;v++){const rx=bladeGeometry.attributes.position.getX(v),ry=bladeGeometry.attributes.position.getY(v),rz=bladeGeometry.attributes.position.getZ(v);const rotatedX=rx*c-rz*s;positions.push(px+rotatedX*w,ry*h,pz+(rx*s+rz*c)*w);const vc=bladeGeometry.attributes.color;const tint=.82+hash(px+12,pz-9)*.40;colors.push(vc.getX(v)*tint,vc.getY(v)*tint,vc.getZ(v)*tint);}
-   seed++;
-  }
-  if(!positions.length)return null;const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geo.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));geo.computeVertexNormals();const mesh=new THREE.Mesh(geo,material);mesh.renderOrder=-59;root.add(mesh);return mesh;
- }
- let lastTileX=Infinity,lastTileZ=Infinity,lastHeightClass;
- function update(position,time=0){
-  grassTime.value=time;
-  birdPosition.value.set(position.x,position.z);
-  const heightClass=position.y>40;
-  const tileX=Math.floor(position.x/TILE),tileZ=Math.floor(position.z/TILE);
-  if(tileX===lastTileX&&tileZ===lastTileZ&&heightClass===lastHeightClass)return;
-  lastTileX=tileX;lastTileZ=tileZ;lastHeightClass=heightClass;
-  if(heightClass){for(const mesh of live.values())if(mesh){root.remove(mesh);mesh.geometry.dispose();}live.clear();return;}
-  const tx=Math.floor(position.x/TILE),tz=Math.floor(position.z/TILE),range=Math.ceil(DETAIL_RADIUS/TILE)+1,needed=new Set();
-  for(let x=tx-range;x<=tx+range;x++)for(let z=tz-range;z<=tz+range;z++){
-   if(Math.hypot((x+.5)*TILE-position.x,(z+.5)*TILE-position.z)<=DETAIL_RADIUS+TILE*.72){
-    const key=`${x},${z}`;needed.add(key);
-    if(!live.has(key))live.set(key,build(x,z));
+ // Two curved blades per clump, sharing ten indexed triangles. A pointed
+ // final segment avoids the degenerate tip triangles in the old mesh.
+ const bladePositions=[],bladeColors=[],bladeIndices=[];
+ for(let blade=0;blade<2;blade++){
+  const angle=blade*Math.PI*.65,cs=Math.cos(angle),sn=Math.sin(angle);
+  const bend=.035+blade*.02,height=.11+blade*.025,width=.018,base=bladePositions.length/3;
+  for(let row=0;row<4;row++){
+   const t=row/3,half=width*(1.-t)*.5;
+   for(const side of row===3?[0]:[-1,1]){
+    bladePositions.push(cs*bend*t*t-sn*half*side,height*t,sn*bend*t*t+cs*half*side);
+    // Linear-light greens match the lawn, with lighter growing tips.
+    bladeColors.push(.055+t*.045,.23+t*.13,.018+t*.025);
    }
   }
-  for(const [key,mesh]of live)if(!needed.has(key)){if(mesh){root.remove(mesh);mesh.geometry.dispose();}live.delete(key);}
+  for(let segment=0;segment<2;segment++){
+   const a=base+segment*2;bladeIndices.push(a,a+1,a+2,a+1,a+3,a+2);
+  }
+  bladeIndices.push(base+4,base+5,base+6);
  }
+ const bladeGeometry=new THREE.BufferGeometry();bladeGeometry.setAttribute('position',new THREE.Float32BufferAttribute(bladePositions,3));bladeGeometry.setAttribute('color',new THREE.Float32BufferAttribute(bladeColors,3));bladeGeometry.setIndex(bladeIndices);bladeGeometry.computeVertexNormals();
+ const grassTime={value:0},birdPosition={value:new THREE.Vector2()},heightFade={value:1};
+ function grassMaterial(dense){
+  const material=new THREE.MeshStandardMaterial({vertexColors:true,roughness:.94,side:THREE.DoubleSide});
+  material.onBeforeCompile=shader=>{
+   shader.uniforms.uGrassBird=birdPosition;shader.uniforms.uGrassTime=grassTime;shader.uniforms.uGrassHeightFade=heightFade;
+   shader.vertexShader=shader.vertexShader.replace('#include <common>',`#include <common>
+    attribute vec4 grassRoot;attribute vec2 grassRotation;
+    uniform vec2 uGrassBird;uniform float uGrassTime,uGrassHeightFade;
+    float grassHash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}`);
+   shader.vertexShader=shader.vertexShader.replace('#include <color_vertex>',`#include <color_vertex>
+    vColor*=.88+grassHash(grassRoot.xy+vec2(12.,-9.))*.24;`);
+   shader.vertexShader=shader.vertexShader.replace('#include <beginnormal_vertex>',`#include <beginnormal_vertex>
+    objectNormal/=vec3(grassRoot.w,grassRoot.z,grassRoot.w);
+    objectNormal.xz=mat2(grassRotation.x,grassRotation.y,-grassRotation.y,grassRotation.x)*objectNormal.xz;`);
+   shader.vertexShader=shader.vertexShader.replace('#include <begin_vertex>',`#include <begin_vertex>
+    float d=distance(grassRoot.xy,uGrassBird);
+    float fade=(1.-smoothstep(${dense?'5.,8.':'12.,18.'},d))*uGrassHeightFade;
+    // Shrink whole blades at their roots. Subpixel blades converge to the green
+    // turf without screen-space stipple, alpha overdraw or crawling pixels.
+    transformed*=vec3(grassRoot.w,grassRoot.z,grassRoot.w)*fade;
+    transformed.xz=mat2(grassRotation.x,grassRotation.y,-grassRotation.y,grassRotation.x)*transformed.xz;
+    float phase=grassRoot.x*.37+grassRoot.y*.29+uGrassTime*1.8;
+    float bend=transformed.y*transformed.y;
+    transformed.x+=sin(phase)*bend*.65;transformed.z+=cos(phase*.83)*bend*.38;
+    transformed.xz+=grassRoot.xy;`);
+   shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
+    // Gentle transmission keeps back faces green without dominating daylight.
+    totalEmissiveRadiance+=diffuseColor.rgb*.12;`);
+  };
+  material.customProgramCacheKey=()=>`instanced-green-grass-v4-${dense?'dense':'sparse'}`;
+  return material;
+ }
+ const denseMaterial=grassMaterial(true),sparseMaterial=grassMaterial(false);
+ function build(tx,tz,dense){
+  const minX=tx*TILE,minZ=tz*TILE,maxX=minX+TILE,maxZ=minZ+TILE;
+  const candidates=grass.filter(p=>p.maxX>=minX&&p.minX<=maxX&&p.maxZ>=minZ&&p.minZ<=maxZ);if(!candidates.length)return null;
+  const roots=[],rotations=[],spacing=dense?SPACING:SPARSE_SPACING,paths=pathsByTile.get(`${tx},${tz}`)||[];
+  // Integer cell coordinates make placement stable across negative tiles,
+  // movement and rebuilds; jitter stays inside its cell and tile.
+  for(let iz=Math.floor(minZ/spacing);iz<Math.ceil(maxZ/spacing);iz++)for(let ix=Math.floor(minX/spacing);ix<Math.ceil(maxX/spacing);ix++){
+   const px=(ix+.1+hash(ix,iz)*.8)*spacing,pz=(iz+.1+hash(ix+41,iz-13)*.8)*spacing;
+   if(px<minX||px>=maxX||pz<minZ||pz>=maxZ)continue;
+   if(!candidates.some(p=>px>=p.minX&&px<=p.maxX&&pz>=p.minZ&&pz<=p.maxZ&&insideRing(px,pz,p.rings[0])&&!p.rings.slice(1).some(h=>insideRing(px,pz,h))))continue;
+   if(paths.some(([a,b])=>nearSegment(px,pz,a,b,3.)))continue;
+   if(map?.buildingAt?.(px,pz))continue;
+   const h=.55+hash(ix+7,iz+19)*.55,w=.75+hash(ix-8,iz+4)*.4,angle=hash(ix+5,iz-7)*Math.PI*2;
+   roots.push(px,pz,h,w);rotations.push(Math.cos(angle),Math.sin(angle));
+  }
+  if(!roots.length)return null;
+  const geometry=new THREE.InstancedBufferGeometry().copy(bladeGeometry);
+  geometry.setAttribute('grassRoot',new THREE.InstancedBufferAttribute(new Float32Array(roots.length),4).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute('grassRotation',new THREE.InstancedBufferAttribute(new Float32Array(rotations.length),2).setUsage(THREE.DynamicDrawUsage));
+  // Bounds include transformed instances, curvature and wind. Local prototype
+  // bounds alone would incorrectly cull grass far from the world origin.
+  geometry.boundingBox=new THREE.Box3(new THREE.Vector3(minX-.12,0,minZ-.12),new THREE.Vector3(maxX+.12,.18,maxZ+.12));
+  geometry.boundingSphere=geometry.boundingBox.getBoundingSphere(new THREE.Sphere());
+  const mesh=new THREE.Mesh(geometry,dense?denseMaterial:sparseMaterial);mesh.renderOrder=-59;mesh.name=dense?'Dense grass':'Sparse grass';
+  mesh.userData.grass={roots:new Float32Array(roots),rotations:new Float32Array(rotations),radius:dense?DENSE_RADIUS:DETAIL_RADIUS};
+  compact(mesh);root.add(mesh);return mesh;
+ }
+ // Only submit roots that can intersect the current fade circle. Padding for
+ // the 2 m update cell keeps this valid as the bird moves within that cell.
+ // Cached placement survives compaction; geometry is never regenerated for wind.
+ function compact(mesh){
+  const {roots,rotations,radius}=mesh.userData.grass,geometry=mesh.geometry;
+  const rootAttribute=geometry.attributes.grassRoot,rotationAttribute=geometry.attributes.grassRotation;
+  const centerX=(lastCellX+.5)*2,centerZ=(lastCellZ+.5)*2,radiusSquared=(radius+Math.SQRT2)**2;let count=0;
+  for(let i=0;i<roots.length/4;i++){
+   if((roots[i*4]-centerX)**2+(roots[i*4+1]-centerZ)**2>radiusSquared)continue;
+   for(let j=0;j<4;j++)rootAttribute.array[count*4+j]=roots[i*4+j];
+   for(let j=0;j<2;j++)rotationAttribute.array[count*2+j]=rotations[i*2+j];count++;
+  }
+  geometry.instanceCount=count;mesh.visible=count>0;
+  for(const attribute of [rootAttribute,rotationAttribute]){
+   attribute.clearUpdateRanges();if(count)attribute.addUpdateRange(0,count*attribute.itemSize);attribute.needsUpdate=true;
+  }
+ }
+ let lastCellX=Infinity,lastCellZ=Infinity,lastHeightClass,pending=[];
+ const remove=mesh=>{if(mesh){root.remove(mesh);mesh.geometry.dispose();}};
+ function update(position,time=0){
+  grassTime.value=time;birdPosition.value.set(position.x,position.z);
+  heightFade.value=1.-THREE.MathUtils.smoothstep(position.y,28,40);
+  const heightClass=position.y>=40,cellX=Math.floor(position.x/2),cellZ=Math.floor(position.z/2);
+  if(heightClass){
+   for(const mesh of live.values())remove(mesh);live.clear();pending=[];
+   lastHeightClass=true;return;
+  }
+  if(cellX!==lastCellX||cellZ!==lastCellZ||heightClass!==lastHeightClass){
+   lastCellX=cellX;lastCellZ=cellZ;lastHeightClass=heightClass;
+   const centerX=(cellX+.5)*2,centerZ=(cellZ+.5)*2,tx=Math.floor(centerX/TILE),tz=Math.floor(centerZ/TILE),range=Math.ceil(DETAIL_RADIUS/TILE)+1,needed=new Set();pending=[];
+   for(let x=tx-range;x<=tx+range;x++)for(let z=tz-range;z<=tz+range;z++){
+    const distance=Math.hypot((x+.5)*TILE-centerX,(z+.5)*TILE-centerZ);
+    // Half tile diagonal plus the 2 m update cell's half diagonal ensures the
+    // moving fade circle always has geometry, including between tile crossings.
+    for(const dense of [false,true])if(distance<=(dense?DENSE_RADIUS:DETAIL_RADIUS)+TILE*Math.SQRT1_2+Math.SQRT2){
+     const key=`${x},${z},${dense}`;needed.add(key);
+     if(!live.has(key))pending.push({key,x,z,dense,distance});
+    }
+   }
+   for(const [key,mesh]of live)if(!needed.has(key)){remove(mesh);live.delete(key);}
+   for(const mesh of live.values())if(mesh)compact(mesh);
+   pending.sort((a,b)=>a.distance-b.distance||Number(a.dense)-Number(b.dense));
+  }
+  // Bound work when landing/entering a park. Wind and fades update uniforms;
+  // existing tile geometry is reused until the bird leaves its neighborhood.
+  for(let built=0;built<2&&pending.length;built++){
+   const tile=pending.shift();live.set(tile.key,build(tile.x,tile.z,tile.dense));
+  }
+ }
+
  return {root,update};
 }

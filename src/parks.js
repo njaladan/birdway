@@ -2,7 +2,7 @@ import * as THREE from '../vendor/three.module.js';
 import {makeGroundMaterial,createGrassDetail,loadGroundTextures} from './ground.js';
 import {buildTrees,loadTrees} from './trees.js';
 
-const PARK_COLORS={park:0x718d59,grass:0x799560,wood:0x53784c,forest:0x5c7e48,recreation_ground:0x718d59,pitch:0x6b8a57,playground:0x87916f,plaza:0xb5ae98,garden:0x63804d};
+const PARK_COLORS={park:0x579c46,grass:0x60a34b,wood:0x47843e,forest:0x4b893c,recreation_ground:0x579c46,pitch:0x559443,playground:0x87916f,plaza:0xb5ae98,garden:0x508e3d};
 const PATH_COLORS={footway:0xb9b29e,steps:0xb5ad99,cycleway:0xb1ad9c,pedestrian:0xc2baa4,path:0xb5b09d};
 const SURFACE_COLORS={asphalt:0xaaa89b,concrete:0xbcb9a9,paving_stones:0xc4bda9,paved:0xbab5a2,wood:0x9f8c6c,gravel:0xaaa28b,dirt:0x9c927a};
 const chunkKey=(x,z)=>`${Math.floor(x/1600)},${Math.floor(z/1600)}`;
