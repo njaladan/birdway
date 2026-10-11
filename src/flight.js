@@ -4,15 +4,15 @@ export const BIRD_RADIUS=.18;
 export const FLIGHT={cruise:35,flap:38,walk:3.6,turn:1.05,pitch:.34,fastPitch:.85,cameraLag:3.1,approachSpeed:12,landingSpeed:3.5,dash:90,dashDuration:1.2,dashCooldown:2,divePitch:1.18};
 export class Flight {
  constructor(bird,camera,map,nest) {
-  this.bird=bird;this.camera=camera;this.map=map;this.nest=nest.clone();this.position=nest.clone();this.previous=nest.clone();this.heading=Math.PI*.67;this.homeHeading=this.heading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys=new Set();this.peck=0;this.elapsed=0;this.distance=0;this.orbit=0;this.orbitPitch=0;this.dashTime=0;this.dashCooldown=0;this.diveTime=0;this.gamepad={turn:0,pitch:0,buttons:[]};this.gamepadActionsArmed=true;this.cameraTarget=new THREE.Vector3();this.forward=new THREE.Vector3();this.desiredCamera=new THREE.Vector3();this.look=new THREE.Vector3();this.onEvent=()=>{};this.onControlAction=()=>{};
+  this.bird=bird;this.camera=camera;this.map=map;this.nest=nest.clone();this.position=nest.clone();this.previous=nest.clone();this.heading=Math.PI*.67;this.homeHeading=this.heading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys=new Set();this.peck=0;this.elapsed=0;this.distance=0;this.orbit=0;this.orbitPitch=0;this.dashTime=0;this.dashCooldown=0;this.diveTime=0;this.compactView=false;this.touch={turn:0,pitch:0,flap:false,dive:false};this.onInputClear=()=>{};this.gamepad={turn:0,pitch:0,buttons:[]};this.gamepadActionsArmed=true;this.cameraTarget=new THREE.Vector3();this.forward=new THREE.Vector3();this.desiredCamera=new THREE.Vector3();this.look=new THREE.Vector3();this.onEvent=()=>{};this.onControlAction=()=>{};
   this.camera.position.set(nest.x+Math.sin(this.heading)*1.1,nest.y+.55,nest.z+Math.cos(this.heading)*1.1);this.bird.position.copy(this.position);
  }
  axis(a,b){return (this.keys.has(a)?1:0)-(this.keys.has(b)?1:0);}
  takeoff(){if(this.flying)this.landing=false;if(!this.flying){this.flying=true;this.landing=false;this.flapStrength=Math.max(this.flapStrength,.28);this.onEvent('takeoff');}}
  dash(){if(!this.flying)this.takeoff();if(this.dashCooldown>0)return;this.landing=false;this.dashTime=FLIGHT.dashDuration;this.dashCooldown=FLIGHT.dashCooldown;this.onEvent('dash');}
  land(){if(this.flying){this.landing=!this.landing;this.onEvent(this.landing?'landing':'takeoff');}}
- clearInput(){this.keys.clear();this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;}
- home(){this.position.copy(this.nest);this.previous.copy(this.nest);this.heading=this.homeHeading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys.clear();this.diveTime=0;this.dashTime=0;this.dashCooldown=0;this.orbit=0;this.orbitPitch=0;this.peck=0;this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;this.camera.position.set(this.nest.x+Math.sin(this.heading)*1.1,this.nest.y+.55,this.nest.z+Math.cos(this.heading)*1.1);this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));this.cameraTarget.copy(this.nest).addScaledVector(this.forward,.18);this.cameraTarget.y+=.04;this.bird.position.copy(this.nest);this.bird.rotation.set(0,this.heading,0,'YXZ');this.onEvent('home');}
+ clearInput(){this.touch.turn=this.touch.pitch=0;this.touch.flap=this.touch.dive=false;this.onInputClear();this.keys.clear();this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;}
+ home(){this.position.copy(this.nest);this.previous.copy(this.nest);this.heading=this.homeHeading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.clearInput();this.diveTime=0;this.dashTime=0;this.dashCooldown=0;this.orbit=0;this.orbitPitch=0;this.peck=0;this.gamepad.turn=0;this.gamepad.pitch=0;this.gamepadActionsArmed=false;this.camera.position.set(this.nest.x+Math.sin(this.heading)*1.1,this.nest.y+.55,this.nest.z+Math.cos(this.heading)*1.1);this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));this.cameraTarget.copy(this.nest).addScaledVector(this.forward,.18);this.cameraTarget.y+=.04;this.bird.position.copy(this.nest);this.bird.rotation.set(0,this.heading,0,'YXZ');this.onEvent('home');}
  update(dt){
   dt=THREE.MathUtils.clamp(dt,0,.05);this.elapsed+=dt;this.dashTime=Math.max(0,this.dashTime-dt);this.dashCooldown=Math.max(0,this.dashCooldown-dt);this.peck=Math.max(0,this.peck-dt*2.5);this.previous.copy(this.position);
   const pads=globalThis.navigator?.getGamepads?.(),pad=pads&&Array.from(pads).find(Boolean);
@@ -27,13 +27,13 @@ export class Flight {
   if(this.gamepadActionsArmed&&justPressed(2))this.onControlAction('interact');
   this.gamepad.buttons=buttons;
   const clampAxis=v=>THREE.MathUtils.clamp(v,-1,1);
-  const turn=clampAxis(this.axis('KeyD','KeyA')+this.axis('ArrowRight','ArrowLeft')+this.gamepad.turn);
-  const climb=clampAxis(this.axis('KeyW','KeyS')+this.axis('ArrowUp','ArrowDown')+this.gamepad.pitch);
-  const flap=this.keys.has('Space')||this.keys.has('GameFlap');
-  const pitchLimit=this.axis('ArrowUp','ArrowDown')!==0?FLIGHT.fastPitch:FLIGHT.pitch;
+  const turn=clampAxis(this.axis('KeyD','KeyA')+this.axis('ArrowRight','ArrowLeft')+this.gamepad.turn+this.touch.turn);
+  const climb=clampAxis(this.axis('KeyW','KeyS')+this.axis('ArrowUp','ArrowDown')+this.gamepad.pitch+this.touch.pitch);
+  const flap=this.keys.has('Space')||this.keys.has('GameFlap')||this.touch.flap;
+  const pitchLimit=this.axis('ArrowUp','ArrowDown')!==0||this.touch.pitch!==0?FLIGHT.fastPitch:FLIGHT.pitch;
   const smoothing=(rate)=>1-Math.exp(-rate*dt);
   this.flapStrength=THREE.MathUtils.lerp(this.flapStrength,flap?1:0,smoothing(6));
-  const forcedDive=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||pad?.buttons[7]?.pressed;
+  const forcedDive=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||pad?.buttons[7]?.pressed||this.touch.dive;
   this.diveTime=this.flying&&!this.landing&&forcedDive?Math.min(1.4,this.diveTime+dt):Math.max(0,this.diveTime-dt*3);
   const dive=THREE.MathUtils.smoothstep(this.diveTime,.25,1.3);
   // Pigeons cruise with short flapping bursts between long, wings-extended
@@ -117,6 +117,6 @@ export class Flight {
   this.camera.position.lerp(this.desiredCamera,smoothing(FLIGHT.cameraLag));
   const cameraArm=this.camera.position.clone().sub(this.position);
   for(let i=1;i<=16;i++){const p=this.position.clone().addScaledVector(cameraArm,i/16);if(this.map.surface(p.x,p.z)>p.y-.08){this.camera.position.copy(this.position).addScaledVector(cameraArm,Math.max(.12,(i-1)/16));this.camera.position.y=Math.max(this.camera.position.y,this.position.y+Math.max(.55,cameraHeight));break;}}
-  this.look.copy(this.position).addScaledVector(this.forward,this.flying?(.3+this.speed*.001)*(1-diveView*.7):2.5);this.look.y+=(this.flying?.06:.48)-diveView*.35;this.cameraTarget.lerp(this.look,smoothing(this.flying?7:5));this.camera.lookAt(this.cameraTarget);
+  this.look.copy(this.position).addScaledVector(this.forward,this.flying?(.3+this.speed*.001)*(1-diveView*.7):(this.compactView?0:2.5));this.look.y+=(this.flying?.06:(this.compactView?0:.48))-diveView*.35;this.cameraTarget.lerp(this.look,smoothing(this.flying?7:5));this.camera.lookAt(this.cameraTarget);
  }
 }

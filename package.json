@@ -6,7 +6,7 @@
   "description": "A peaceful browser pigeon game over real Manhattan geography",
   "scripts": {
     "start": "node tools/serve.mjs",
-    "check": "node tools/check.mjs && node tools/test-flight.mjs && node tools/test-harbor.mjs"
+    "check": "node tools/check.mjs && node tools/test-flight.mjs && node tools/test-touch.mjs && node tools/test-harbor.mjs"
   },
   "engines": { "node": ">=20" }
 }

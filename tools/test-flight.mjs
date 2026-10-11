@@ -170,4 +170,32 @@ home.flight.update(1/60);assert.ok(home.camera.position.distanceTo(home.flight.p
 obstacles=[{x0:-2,x1:2,z0:1,z1:4,h:40}];
 const cameraWall=create(20);cameraWall.flight.heading=0;cameraWall.flight.speed=35;cameraWall.flight.update(1/60);
 assert.ok(cameraWall.camera.position.z<1,'camera stays on the bird side of the wall after smoothing');
-console.log('Flight controller checks passed: smooth flap takeoff, brisk gait, approach slowing, landing flare, speed targets, dive intent, clamped steering, gamepad edges/takeoff, collisions and camera/home resets.');
+// Touch analog movement matches arrows, with independent flap and dive holds.
+obstacles=[];map.onLand=()=>false;
+const touchFlight=create(300),arrowFlight=create(300);
+touchFlight.flight.touch.turn=.6;touchFlight.flight.touch.pitch=.75;
+arrowFlight.flight.keys.add('ArrowRight');arrowFlight.flight.keys.add('ArrowUp');
+run(touchFlight.flight,90);run(arrowFlight.flight,90);
+assert.ok(touchFlight.flight.heading<Math.PI*.67,'touch steering turns the bird');
+assert.ok(touchFlight.flight.position.y>300,'upward thumb movement climbs');
+assert.ok(Math.abs(touchFlight.flight.pitch-arrowFlight.flight.pitch*.75)<1e-8,'touch altitude is proportional to the faster arrow pitch');
+touchFlight.flight.touch.pitch=0;touchFlight.flight.touch.flap=true;run(touchFlight.flight,60);
+assert.ok(touchFlight.flight.flapStrength>.99,'held touch flap drives wingbeats');
+touchFlight.flight.touch.flap=false;touchFlight.flight.touch.dive=true;run(touchFlight.flight,80);
+assert.ok(touchFlight.flight.pitch<-.8,'held touch dive reaches a steep descent');
+touchFlight.flight.touch.dive=false;run(touchFlight.flight,60);
+assert.equal(touchFlight.flight.diveTime,0,'releasing dive recovers');
+const touchClamp=create(),keyClamp=create();touchClamp.flight.touch.turn=1;touchClamp.flight.keys.add('KeyD');keyClamp.flight.keys.add('KeyD');
+run(touchClamp.flight,60);run(keyClamp.flight,60);
+assert.ok(Math.abs(touchClamp.flight.heading-keyClamp.flight.heading)<1e-8,'touch plus keyboard steering stays clamped');
+touchFlight.flight.touch.flap=true;touchFlight.flight.clearInput();
+assert.deepEqual(touchFlight.flight.touch,{turn:0,pitch:0,flap:false,dive:false});
+touchFlight.flight.touch.turn=1;touchFlight.flight.touch.dive=true;touchFlight.flight.home();
+assert.deepEqual(touchFlight.flight.touch,{turn:0,pitch:0,flap:false,dive:false},'returning home releases every touch input');
+
+// Portrait camera points at a perched bird, keeping it clear of bottom controls.
+map.onLand=()=>true;const portrait=create(BIRD_CLEARANCE);portrait.flight.flying=false;portrait.flight.compactView=true;
+run(portrait.flight,180);portrait.camera.updateMatrixWorld();
+assert.ok(Math.abs(portrait.flight.position.clone().project(portrait.camera).y)<.05,'portrait ground camera keeps the bird centered');
+
+console.log('Flight controller checks passed: smooth flap takeoff, brisk gait, approach slowing, landing flare, speed targets, dive intent, clamped steering, gamepad edges/takeoff, touch steering/flap/dive/release, collisions and camera/home resets.');
