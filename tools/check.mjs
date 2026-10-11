@@ -5,7 +5,7 @@ import {spawnSync} from 'node:child_process';
 import * as THREE from '../vendor/three.module.js';
 import {loadGeography} from '../src/geography.js';
 import {makeBird,loadBirdModel} from '../src/bird.js';
-import {Flight,BIRD_CLEARANCE} from '../src/flight.js';
+import {Flight,BIRD_CLEARANCE,FLIGHT} from '../src/flight.js';
 import {CityLife} from '../src/life.js';
 import {loadParks} from '../src/parks.js';
 const root=new URL('../',import.meta.url);
@@ -26,7 +26,7 @@ flight.home();assert.equal(flight.flying,false);assert.ok(flight.position.distan
 // High-speed diving should keep the bird framed and show the ground.
 const clearMap={surface:()=>0,buildingAt:()=>null,onLand:()=>true},diveCamera=new THREE.PerspectiveCamera(58,1.5,.08,16000);
 const diveFlight=new Flight(makeBird(),diveCamera,clearMap,new THREE.Vector3(0,300,0));diveFlight.flying=true;diveFlight.cameraTarget.copy(diveFlight.position);
-for(let i=0;i<120;i++)diveFlight.update(1/60);diveFlight.dash();for(let i=0;i<60;i++)diveFlight.update(1/60);assert.ok(diveFlight.speed>180);
+for(let i=0;i<120;i++)diveFlight.update(1/60);diveFlight.dash();for(let i=0;i<60;i++)diveFlight.update(1/60);assert.ok(diveFlight.speed<=FLIGHT.dash&&diveFlight.speed>=FLIGHT.cruise,'dash remains altitude independent');
 diveFlight.keys.add('ControlLeft');for(let i=0;i<110;i++)diveFlight.update(1/60);diveCamera.updateMatrixWorld();
 assert.ok(Math.abs(diveFlight.position.clone().project(diveCamera).y)<.35,'The diving pigeon remains near screen center');
 assert.ok(diveCamera.getWorldDirection(new THREE.Vector3()).y<-.8,'A steep dive reveals the ground');

@@ -8,7 +8,7 @@ export function loadBirdModel(){
   if(!response.ok)throw new Error('The pigeon model could not load. Serve Birdway over HTTP.');
   const gltf=await new GLTFLoader().parseAsync(await response.arrayBuffer(),'');
   template=gltf.scene;clips=gltf.animations;
-  if(!template.getObjectByProperty('isSkinnedMesh',true)||!clips.some(c=>c.name==='Flight'))throw new Error('The pigeon rig or animations are missing.');
+  if(!template.getObjectByProperty('isSkinnedMesh',true)||!clips.some(c=>c.name==='Flight')||!clips.some(c=>c.name==='Glide')||!clips.some(c=>c.name==='Flare'))throw new Error('The pigeon rig or animations are missing.');
   template.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;}});
  })();
 }
@@ -20,15 +20,32 @@ export function makeBird(scale=1){
  const size=new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()),factor=.35/size.z;
  model.scale.set(factor*1.24,factor,factor);model.position.y=-.16;
  const mixer=new THREE.AnimationMixer(model),actions=new Map();
- for(const clip of clips)if(['Flight','Idle','Walk','Peck'].includes(clip.name))actions.set(clip.name,mixer.clipAction(clip));
- let current=actions.get('Idle'),lastTime=null,pecking=false;current.play();
+ for(const clip of clips)if(['Flight','Glide','Flare','Idle','Walk','Peck'].includes(clip.name))actions.set(clip.name,mixer.clipAction(clip));
+ let current=actions.get('Idle'),lastTime=null,pecking=false,walkPhase=0;
+ const upperLegs=['left-upper-leg-bone','right-upper-leg-bone'].map(n=>model.getObjectByName(n));
+ const lowerLegs=['left-lower-leg-bone','right-lower-leg-bone'].map(n=>model.getObjectByName(n));
+ const walkRotation=new THREE.Quaternion(),walkAxis=new THREE.Vector3(1,0,0),modelY=model.position.y;current.play();
  const change=name=>{const next=actions.get(name);if(!next||next===current)return;next.reset().setEffectiveWeight(1).play();current.crossFadeTo(next,.18,false);current=next;};
- bird.userData.animate=(time,flying,speed=0,peck=0)=>{
+ bird.userData.animate=(time,flying,speed=0,peck=0,flightMode=null)=>{
   const dt=lastTime===null?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
-  const name=flying?'Flight':peck>0?'Peck':speed>.08?'Walk':'Idle';change(name);
-  current.timeScale=name==='Flight'?1.8+Math.min(speed/160,.9):name==='Walk'?Math.min(2.8,.8+speed*.7):1;
+  const flightAnimation=flightMode?(flightMode.landing?'Flare':flightMode.glide||flightMode.flapStrength<.18?'Glide':'Flight'):'Flight';
+  const name=flying?flightAnimation:peck>0?'Peck':speed>.08?'Walk':'Idle';change(name);
+  current.timeScale=name==='Flight'?3.4+Math.min(speed/180,.9):name==='Walk'?Math.min(3.2,.9+speed*.62):1;
   if(name==='Peck'){if(!pecking)current.reset();current.time=(1-peck)*current.getClip().duration;current.paused=true;}else current.paused=false;
   pecking=name==='Peck';mixer.update(dt);
+  if(name==='Walk'){
+   walkPhase+=dt*(6+Math.min(speed,5)*3.4);
+   const bob=Math.abs(Math.sin(walkPhase*2));
+   for(let i=0;i<2;i++){
+    const phase=walkPhase+(i===0?0:Math.PI),swing=Math.sin(phase)*.32,step=Math.max(0,Math.cos(phase));
+    walkRotation.setFromAxisAngle(walkAxis,swing);if(upperLegs[i])upperLegs[i].quaternion.multiply(walkRotation);
+    walkRotation.setFromAxisAngle(walkAxis,step*.42);if(lowerLegs[i])lowerLegs[i].quaternion.multiply(walkRotation);
+   }
+   model.position.y=modelY+.004+bob*.014;
+  }else{
+   model.position.y=modelY;
+  }
+  bird.userData.animationName=name;bird.userData.walkPhase=walkPhase;bird.userData.flightPose=name==='Flare'?'flare':name==='Glide'?'glide':name==='Flight'?'flap':null;
  };
  bird.userData.animate(0,false);bird.userData.mixer=mixer;
  return bird;

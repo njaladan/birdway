@@ -63,33 +63,59 @@ def sample(action,frame):
  return {b.name:b.rotation_quaternion.copy() for b in rig.pose.bones}
 flightSamples=[sample(original['flap-wings-animation'],i) for i in range(25)]
 idleSamples=[sample(original['idle-animation'],i%12) for i in range(49)]
+glidePose=sample(original['flap-wings-animation'],0)
 legPose=sample(original['legs-up-animation'],4)
 for action in original.values():bpy.data.actions.remove(action)
-for name,frames in [('Flight',24),('Idle',48),('Walk',24),('Peck',24)]:
+for name,frames in [('Flight',24),('Glide',24),('Flare',24),('Idle',48),('Walk',24),('Peck',24)]:
  action=bpy.data.actions.new(name);clips.append(action);reset();rig.animation_data.action=action
  for frame in range(frames+1):
   t=frame/frames;reset()
-  poses=flightSamples[frame] if name=='Flight' else idleSamples[frame]
+  poses=flightSamples[frame] if name=='Flight' else glidePose if name in ('Glide','Flare') else idleSamples[frame]
   for bone,q in poses.items():rig.pose.bones[bone].rotation_quaternion=q
   if name=='Flight':
    for b in rig.pose.bones:
     if 'leg' in b.name:b.rotation_quaternion=legPose[b.name]
+   tailWidth=.72
+  elif name=='Glide':
+   # Pigeons keep their wings extended during a glide. A modest up-angle
+   # catches air without holding the source rig's raised downstroke pose.
+   for side,s in [('left',1),('right',-1)]:
+    b=rig.pose.bones[f'{side}-wing-1'];axis=b.bone.matrix_local.to_3x3().inverted()@Vector((1,0,0))
+    b.rotation_quaternion=Quaternion(axis,s*.10)@glidePose[b.name]
+   for b in rig.pose.bones:
+    if 'leg' in b.name:b.rotation_quaternion=legPose[b.name]
+   tailWidth=.48
+  elif name=='Flare':
+   # Landing flare keeps the full lifting surface open, including the tail.
+   for side,s in [('left',1),('right',-1)]:
+    b=rig.pose.bones[f'{side}-wing-1'];axis=b.bone.matrix_local.to_3x3().inverted()@Vector((1,0,0))
+    b.rotation_quaternion=Quaternion(axis,s*.23)@glidePose[b.name]
+   for b in rig.pose.bones:
+    if 'leg' in b.name:b.rotation_quaternion=legPose[b.name]
+   tailWidth=1
   else:
    for side,s in [('left',1),('right',-1)]:
-    # Turn the spread wings back along the tail and fold their outer joints.
-    for joint,angle in [(1,1.3),(2,.32)]:
+    # Fold at the shoulder into the body outline, then tuck the primaries
+    # back along the tail. In the source rig a signed armature-Z turn sweeps
+    # each outboard wing toward -Y (the bird's tail), rather than toward the
+    # camera. This reduces the resting wing width from ~56 cm to ~22 cm.
+    for joint,angle in [(1,math.pi/2),(2,.42)]:
      b=rig.pose.bones[f'{side}-wing-{joint}'];axis=b.bone.matrix_local.to_3x3().inverted()@Vector((0,0,1));b.rotation_quaternion=Quaternion(axis,s*angle)
+   tailWidth=.28
    if name=='Walk':
     for side,s in [('left',1),('right',-1)]:
      b=rig.pose.bones[f'{side}-upper-leg-bone'];b.rotation_quaternion=Quaternion((1,0,0),math.sin(t*math.tau)*s*.33)
-     b=rig.pose.bones[f'{side}-lower-leg-bone'];b.rotation_quaternion=Quaternion((1,0,0),max(0,math.sin(t*math.tau)*s)*.28)
+     b=rig.pose.bones[f'{side}-lower-leg-bone'];b.rotation_quaternion=Quaternion((1,0,0),max(0,math.cos(t*math.tau)*s)*.42)
     rig.pose.bones['neck-bone'].rotation_quaternion=Quaternion((1,0,0),math.sin(t*math.tau*2)*.08)
    if name=='Peck':
     bend=math.sin(t*math.pi)**2
     rig.pose.bones['thorax-bone'].rotation_quaternion=Quaternion((1,0,0),-bend*.5)
     rig.pose.bones['neck-bone'].rotation_quaternion=Quaternion((1,0,0),-bend*.65)
     rig.pose.bones['face-bone'].rotation_quaternion=Quaternion((1,0,0),-bend*.3)
-  for b in rig.pose.bones:b.keyframe_insert(data_path='rotation_quaternion',frame=frame,group=b.name)
+  for n in ['tail-bone-1','tail-bone-2']:rig.pose.bones[n].scale.x=tailWidth
+  for b in rig.pose.bones:
+   b.keyframe_insert(data_path='rotation_quaternion',frame=frame,group=b.name)
+   b.keyframe_insert(data_path='scale',frame=frame,group=b.name)
  for curve in action.fcurves:
   for k in curve.keyframe_points:k.interpolation='LINEAR'
 rig.animation_data.action=clips[1];bpy.context.scene.frame_set(0)
