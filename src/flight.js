@@ -1,7 +1,7 @@
 import * as THREE from '../vendor/three.module.js';
 export const BIRD_CLEARANCE=.16;
 export const BIRD_RADIUS=.18;
-export const FLIGHT={cruise:35,glide:55,brake:12,flap:38,walk:3.6,turn:1.05,pitch:.34,cameraLag:3.1,approachSpeed:12,landingSpeed:3.5,dash:90,dashDuration:1.2,dashCooldown:2,divePitch:1.18};
+export const FLIGHT={cruise:35,flap:38,walk:3.6,turn:1.05,pitch:.34,fastPitch:.85,cameraLag:3.1,approachSpeed:12,landingSpeed:3.5,dash:90,dashDuration:1.2,dashCooldown:2,divePitch:1.18};
 export class Flight {
  constructor(bird,camera,map,nest) {
   this.bird=bird;this.camera=camera;this.map=map;this.nest=nest.clone();this.position=nest.clone();this.previous=nest.clone();this.heading=Math.PI*.67;this.homeHeading=this.heading;this.speed=0;this.vertical=0;this.bank=0;this.pitch=0;this.flapStrength=0;this.approachBlend=0;this.flying=false;this.landing=false;this.keys=new Set();this.peck=0;this.elapsed=0;this.distance=0;this.orbit=0;this.orbitPitch=0;this.dashTime=0;this.dashCooldown=0;this.diveTime=0;this.gamepad={turn:0,pitch:0,buttons:[]};this.gamepadActionsArmed=true;this.cameraTarget=new THREE.Vector3();this.forward=new THREE.Vector3();this.desiredCamera=new THREE.Vector3();this.look=new THREE.Vector3();this.onEvent=()=>{};this.onControlAction=()=>{};
@@ -29,10 +29,11 @@ export class Flight {
   const clampAxis=v=>THREE.MathUtils.clamp(v,-1,1);
   const turn=clampAxis(this.axis('KeyD','KeyA')+this.axis('ArrowRight','ArrowLeft')+this.gamepad.turn);
   const climb=clampAxis(this.axis('KeyW','KeyS')+this.axis('ArrowUp','ArrowDown')+this.gamepad.pitch);
-  const flap=this.keys.has('Space')||this.keys.has('GameFlap'),glide=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||pad?.buttons[7]?.pressed,brake=this.keys.has('AltLeft')||this.keys.has('AltRight')||pad?.buttons[6]?.pressed;
+  const flap=this.keys.has('Space')||this.keys.has('GameFlap');
+  const pitchLimit=this.axis('ArrowUp','ArrowDown')!==0?FLIGHT.fastPitch:FLIGHT.pitch;
   const smoothing=(rate)=>1-Math.exp(-rate*dt);
   this.flapStrength=THREE.MathUtils.lerp(this.flapStrength,flap?1:0,smoothing(6));
-  const forcedDive=this.keys.has('ControlLeft')||this.keys.has('ControlRight');
+  const forcedDive=this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||pad?.buttons[7]?.pressed;
   this.diveTime=this.flying&&!this.landing&&forcedDive?Math.min(1.4,this.diveTime+dt):Math.max(0,this.diveTime-dt*3);
   const dive=THREE.MathUtils.smoothstep(this.diveTime,.25,1.3);
   // Pigeons cruise with short flapping bursts between long, wings-extended
@@ -41,20 +42,20 @@ export class Flight {
   const beatPhase=this.elapsed%2.65;
   const surfaceHeight=this.map.surface(this.position.x,this.position.z);
   const heightAboveSurface=Math.max(0,this.position.y-surfaceHeight);
-  const autoFlap=this.flying&&!this.landing&&!glide&&!brake&&dive<.08&&heightAboveSurface>24&&beatPhase<1.2?Math.sin(Math.PI*beatPhase/1.2):0;
+  const autoFlap=this.flying&&!this.landing&&!forcedDive&&dive<.08&&heightAboveSurface>24&&beatPhase<1.2?Math.sin(Math.PI*beatPhase/1.2):0;
   if(this.landing&&climb>.35){this.landing=false;this.onEvent('landingCancel');}
   const descendingTowardSurface=this.flying&&this.vertical<-.35&&heightAboveSurface<24&&(surfaceHeight>0||this.map.onLand(this.position.x,this.position.z));
   this.approachBlend=THREE.MathUtils.lerp(this.approachBlend,this.landing||descendingTowardSurface?1:0,smoothing(2.3));
-  const cruiseTarget=this.dashTime>0?FLIGHT.dash:brake?FLIGHT.brake:glide?FLIGHT.glide:THREE.MathUtils.lerp(FLIGHT.cruise,FLIGHT.flap,this.flapStrength);
+  const cruiseTarget=this.dashTime>0?FLIGHT.dash:THREE.MathUtils.lerp(FLIGHT.cruise,FLIGHT.flap,this.flapStrength);
   const nearSurface=1-THREE.MathUtils.smoothstep(heightAboveSurface,1.5,7);
   const landingTarget=THREE.MathUtils.lerp(FLIGHT.approachSpeed,FLIGHT.landingSpeed,nearSurface);
   const targetSpeed=this.flying?THREE.MathUtils.lerp(cruiseTarget,landingTarget,this.approachBlend):(climb*FLIGHT.walk);
   this.speed=THREE.MathUtils.lerp(this.speed,targetSpeed,smoothing(this.flying?(this.dashTime>0?5:1.7):7));
   this.heading-=turn*FLIGHT.turn*dt*(this.flying?(this.landing?.95:.85):1.9);
   this.bank=THREE.MathUtils.lerp(this.bank,this.flying?-turn*.55:0,smoothing(4.4));
-  this.pitch=THREE.MathUtils.lerp(this.pitch,this.flying?(dive>.01?-(.3+dive*(FLIGHT.divePitch-.3)):climb*FLIGHT.pitch+(flap?.1:0)):0,smoothing(2.7));
+  this.pitch=THREE.MathUtils.lerp(this.pitch,this.flying?(dive>.01?-(.3+dive*(FLIGHT.divePitch-.3)):climb*pitchLimit+(flap?.1:0)):0,smoothing(2.7));
   const landingFall=THREE.MathUtils.lerp(-4,-1.15,nearSurface)+climb*2.2;
-  const desiredVertical=this.flying?(this.landing?landingFall:Math.sin(this.pitch)*this.speed+this.flapStrength*16+autoFlap*6-(brake?.35:glide?1.2:1.7)):0;
+  const desiredVertical=this.flying?(this.landing?landingFall:Math.sin(this.pitch)*this.speed+this.flapStrength*16+autoFlap*6-1.7):0;
   this.vertical=THREE.MathUtils.lerp(this.vertical,desiredVertical,smoothing(2.5));
   this.forward.set(-Math.sin(this.heading),0,-Math.cos(this.heading));
   const airborneAtMove=this.flying;
@@ -99,7 +100,7 @@ export class Flight {
   if(Math.abs(this.position.x)>6500||this.position.z>4000||this.position.z< -5700)this.heading+=dt*.9;
   this.distance+=this.position.distanceTo(this.previous);
   this.bird.position.copy(this.position);this.bird.rotation.set(this.pitch,this.heading,this.bank,'YXZ');
-  const animationFlap=Math.max(this.flapStrength,autoFlap),animationGlide=glide||brake||this.landing||(animationFlap<.18);
+  const animationFlap=Math.max(this.flapStrength,autoFlap),animationGlide=forcedDive||this.landing||(animationFlap<.18);
   const landingPose=this.landing||heightAboveSurface<8&&this.approachBlend>.45;
   this.bird.userData.animate(this.elapsed,this.flying,Math.abs(this.speed),this.peck,{flapStrength:animationFlap,glide:animationGlide,landing:landingPose,dive});
   this.orbit*=Math.exp(-dt*.45);this.orbitPitch*=Math.exp(-dt*.45);

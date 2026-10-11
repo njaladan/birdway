@@ -36,13 +36,12 @@ The entire repository is a static website. To host it, serve this directory with
 
 | Input | In flight | On a street / roof |
 | --- | --- | --- |
-| W / S or up / down | Climb / descend | Brisk walk forward / back |
+| W / S | Gentle climb / descend | Brisk walk forward / back |
+| Up / down | Fast climb / descend | Brisk walk forward / back |
 | A / D or left / right | Bank and turn | Turn |
 | Space | Tap to take off; hold to flap and rise smoothly | Take off |
-| Shift | Faster glide | — |
-| Alt / left trigger | Slow, precise flight | — |
+| Shift | Steep dive; release to recover | — |
 | F | Short dash burst | Take off with a dash |
-| Ctrl | Deliberate steep dive; release to recover | — |
 | T / [ / ] | Time presets / previous / next hour | Same |
 | E | Begin or cancel a gentle landing approach | Interact / pick up / deliver |
 | P | — | Peck food, or eat a carried bite |
@@ -54,15 +53,15 @@ The entire repository is a static website. To host it, serve this directory with
 | M / Escape | Mute / pause | Mute / pause |
 | Mouse drag | Look around; camera gently recenters | Look around |
 
-Gamepad support: left stick steers and climbs, A / Cross takes off and flaps, B / Circle dashes, X / Square begins or cancels landing (or interacts on the ground), left trigger brakes for precise low-speed flight, and right trigger glides. Menus and other actions use the keyboard. Desktop keyboard play is the primary experience; touch flight controls are not implemented.
+Gamepad support: left stick steers and climbs, A / Cross takes off and flaps, B / Circle dashes, X / Square begins or cancels landing (or interacts on the ground), and right trigger dives. Menus and other actions use the keyboard. Desktop keyboard play is the primary experience; touch flight controls are not implemented.
 
-For a landing, press E and steer toward the chosen surface. The bird eases down to a brisk approach speed, then slows and flares near the roof or street. Press E again to cancel; W can also climb out of an approach. Alt / left trigger brakes for precise low-speed flight. W climbs and S descends smoothly; Ctrl starts a deliberate steep dive, and releasing it lets the bird recover. In ordinary flight, the pigeon alternates short wingbeat bursts with extended glides; holding Space keeps flapping to climb. Wings fold close to the body on foot and spread for a glide or landing flare. Walking off a roof spreads the wings automatically. Over water, a gentle lift keeps the pigeon safe. H is a convenience for an unhurried trip home, not a penalty.
+For a landing, press E and steer toward the chosen surface. The bird eases down to a brisk approach speed, then slows and flares near the roof or street. Press E again to cancel; W or Up can also climb out of an approach. W / S change altitude gently; Up / Down climb and descend faster. Shift starts a deliberate steep dive, and releasing it lets the bird recover. In ordinary flight, the pigeon alternates short wingbeat bursts with extended glides; holding Space keeps flapping to climb. Wings fold close to the body on foot and spread for a glide or landing flare. Walking off a roof spreads the wings automatically. Over water, a gentle lift keeps the pigeon safe. H is a convenience for an unhurried trip home, not a penalty.
 
 ## Performance
 
 Balanced starts at pixel ratio 1.25 and adapts down in small steps to 0.8 when frames remain slower than 30 fps; Light uses pixel ratio 1 and disables shadows; High uses pixel ratio 2 and shadows. Use Settings → Light on a large Retina display if needed. Building, park, and path geometry is batched by spatial chunk. Roof equipment and trees are instanced; trees switch between detailed and sparse canopy cards by distance; grass blades are generated within 24 m and cleared above 40 m; each rigged pigeon uses one skinned draw call; distant small props and traffic are hidden. There is no postprocessing, streaming imagery or physics engine. High adds a capped skyline reflection pass; Balanced and Light retain wave shading with analytic sky reflections. Nearby architecture retains surveyed roofs; distant blocks use simplified footprints and heights. Shadows update at most eight times per second, and the minimap crops a cached atlas.
 
-Flight targets 35 m/s cruise and 55 m/s glide at any altitude. A dash targets 90 m/s for 1.2 seconds, with a two-second cooldown. Brisk ground walking targets 3.6 m/s; holding Space builds lift over a short flap instead of jumping upward instantly. Approaches automatically reduce forward speed near the landing surface. These are game movement values, not a measured biological simulation.
+Flight targets 35 m/s cruise at any altitude. A dash targets 90 m/s for 1.2 seconds, with a two-second cooldown. Brisk ground walking targets 3.6 m/s; holding Space builds lift over a short flap instead of jumping upward instantly. Up / Down use a steeper pitch than W / S for faster altitude changes. Approaches automatically reduce forward speed near the landing surface. These are game movement values, not a measured biological simulation.
 
 The implementation targets an M1 MacBook Pro, but no M1 hardware benchmark has been run. Software-rendered Chromium validates rendering and interactions here; it cannot establish Mac frame rate. Try Light first if Balanced feels heavy. Flight tuning lives in the small `FLIGHT` object in `src/flight.js`.
 

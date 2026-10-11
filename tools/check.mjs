@@ -27,7 +27,7 @@ flight.home();assert.equal(flight.flying,false);assert.ok(flight.position.distan
 const clearMap={surface:()=>0,buildingAt:()=>null,onLand:()=>true},diveCamera=new THREE.PerspectiveCamera(58,1.5,.08,16000);
 const diveFlight=new Flight(makeBird(),diveCamera,clearMap,new THREE.Vector3(0,300,0));diveFlight.flying=true;diveFlight.cameraTarget.copy(diveFlight.position);
 for(let i=0;i<120;i++)diveFlight.update(1/60);diveFlight.dash();for(let i=0;i<60;i++)diveFlight.update(1/60);assert.ok(diveFlight.speed<=FLIGHT.dash&&diveFlight.speed>=FLIGHT.cruise,'dash remains altitude independent');
-diveFlight.keys.add('ControlLeft');for(let i=0;i<110;i++)diveFlight.update(1/60);diveCamera.updateMatrixWorld();
+diveFlight.keys.add('ShiftLeft');for(let i=0;i<110;i++)diveFlight.update(1/60);diveCamera.updateMatrixWorld();
 assert.ok(Math.abs(diveFlight.position.clone().project(diveCamera).y)<.35,'The diving pigeon remains near screen center');
 assert.ok(diveCamera.getWorldDirection(new THREE.Vector3()).y<-.8,'A steep dive reveals the ground');
 

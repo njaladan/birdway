@@ -18,13 +18,12 @@ function create(y=100){
 }
 function run(flight,frames=120){for(let i=0;i<frames;i++)flight.update(1/60);}
 
-// Cruise, glide and dash targets stay stable high above the map.
+// Cruise and dash targets stay stable high above the map.
 const high=create(300);run(high.flight,240);assert.ok(Math.abs(high.flight.speed-FLIGHT.cruise)<.2);
-high.flight.keys.add('ShiftLeft');run(high.flight,240);assert.ok(Math.abs(high.flight.speed-FLIGHT.glide)<.2);
-high.flight.keys.clear();high.flight.dash();run(high.flight,30);assert.ok(Math.abs(high.flight.speed-FLIGHT.dash)<3);
-const brake=create(300);brake.flight.keys.add('AltLeft');run(brake.flight,240);
-assert.ok(Math.abs(brake.flight.speed-FLIGHT.brake)<.2,'Alt should settle into low-speed precision flight');
-assert.ok(brake.flight.vertical>-.6,'airbraking should not force a dive');
+high.flight.keys.clear();high.flight.dash();run(high.flight,40);assert.ok(Math.abs(high.flight.speed-FLIGHT.dash)<3);
+const removedControls=create(300);removedControls.flight.keys.add('AltLeft');removedControls.flight.keys.add('ControlLeft');run(removedControls.flight,240);
+assert.ok(Math.abs(removedControls.flight.speed-FLIGHT.cruise)<.2,'removed brake controls must not change cruising speed');
+assert.equal(removedControls.flight.diveTime,0,'Ctrl no longer starts a dive');
 const cruise=create(300),cruiseHeight=cruise.flight.position.y;run(cruise.flight,480);
 assert.ok(Math.abs(cruise.flight.position.y-cruiseHeight)<2,'automatic cruise wingbeats support level flight without a continual climb');
 
@@ -104,12 +103,26 @@ for(let i=0;i<480;i++){periodicFlight.update(1/60);poses.add(periodicBird.userDa
 assert.ok(poses.has('Flight')&&poses.has('Glide'),'ordinary cruise alternates wingbeat bursts with extended-wing glides');
 assert.ok(Math.abs(periodicFlight.position.y-cruisePos.y)<2,'alternating flaps and glides retain nearly level cruise height');
 
-// S descends at a mild pitch; only holding Ctrl builds a deliberate steep dive.
-const controls=create(300);controls.flight.keys.add('KeyS');run(controls.flight,60);
+// Arrow keys change altitude faster than W/S without initiating a dive.
+for(const [arrow,key,direction] of [['ArrowUp','KeyW',1],['ArrowDown','KeyS',-1]]){
+ const fast=create(300),gentle=create(300);fast.flight.keys.add(arrow);gentle.flight.keys.add(key);
+ run(fast.flight,120);run(gentle.flight,120);
+ assert.ok(direction*(fast.flight.position.y-300)>direction*(gentle.flight.position.y-300)*1.8,'arrows must change altitude substantially faster than W/S');
+ assert.equal(fast.flight.diveTime,0,'fast descent must stay separate from a deliberate dive');
+ fast.flight.keys.add(key);run(fast.flight,30);assert.ok(Math.abs(fast.flight.pitch)<FLIGHT.fastPitch+.001,'combined keyboard inputs cannot exceed the fast pitch limit');
+}
+// S descends at a mild pitch; Shift builds a deliberate steep dive and releases it.
+const controls=create(300);run(controls.flight,240);controls.flight.keys.add('KeyS');run(controls.flight,60);
 assert.equal(controls.flight.diveTime,0);assert.ok(controls.flight.pitch>-.6,'S must not force a steep dive');
-controls.flight.keys.delete('KeyS');controls.flight.keys.add('ControlLeft');run(controls.flight,70);
-assert.ok(controls.flight.diveTime>.9);assert.ok(controls.flight.pitch<-.8,'Ctrl should produce a deliberate steep dive');
+controls.flight.keys.delete('KeyS');controls.flight.keys.add('ShiftLeft');run(controls.flight,70);
+assert.ok(controls.flight.diveTime>.9);assert.ok(controls.flight.pitch<-.8,'Shift should produce a deliberate steep dive');
 const speedAtDive=controls.flight.speed;assert.ok(speedAtDive<FLIGHT.dash,'diving alone must not add extreme speed');
+assert.ok(Math.abs(speedAtDive-FLIGHT.cruise)<.2,'Shift must dive without switching to fast glide');
+controls.flight.keys.clear();controls.flight.keys.add('ArrowUp');run(controls.flight,90);
+assert.equal(controls.flight.diveTime,0);assert.ok(controls.flight.vertical>15,'release Shift and press Up to recover into a fast climb');
+const rightShift=create(300);rightShift.flight.keys.add('ShiftRight');run(rightShift.flight,90);assert.ok(rightShift.flight.pitch<-.8,'both Shift keys dive');
+const trigger=create(300);pad={axes:[0,0],buttons:Array.from({length:8},(_,i)=>({pressed:i===7}))};run(trigger.flight,90);pad=null;
+assert.ok(trigger.flight.pitch<-.8,'the gamepad right trigger dives');
 
 // Keyboard and analog turn inputs combine within the same normalized range.
 const keyboard=create(),combined=create();keyboard.flight.keys.add('KeyD');combined.flight.keys.add('KeyD');
