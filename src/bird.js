@@ -18,7 +18,9 @@ export function makeBird(scale=1){
  // Source is metres. GLTF already maps Blender +Y to the game's forward -Z.
  // A 35 cm body, roughly 60 cm wingspan, with feet 16 cm below the player origin.
  const size=new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()),factor=.35/size.z;
- model.scale.set(factor*1.24,factor,factor);model.position.y=-.16;
+ // Keep the torso at its measured width; flight clips restore the full
+ // wingspan through the wing bones without widening the body.
+ model.scale.set(factor,factor,factor);model.position.y=-.16;
  const mixer=new THREE.AnimationMixer(model),actions=new Map();
  for(const clip of clips)if(['Flight','Glide','Flare','Idle','Walk','Peck'].includes(clip.name))actions.set(clip.name,mixer.clipAction(clip));
  let current=actions.get('Idle'),lastTime=null,pecking=false,walkPhase=0;
@@ -30,7 +32,8 @@ export function makeBird(scale=1){
   const dt=lastTime===null?0:Math.max(0,Math.min(.1,time-lastTime));lastTime=time;
   const flightAnimation=flightMode?(flightMode.landing?'Flare':flightMode.glide||flightMode.flapStrength<.18?'Glide':'Flight'):'Flight';
   const name=flying?flightAnimation:peck>0?'Peck':speed>.08?'Walk':'Idle';change(name);
-  current.timeScale=name==='Flight'?3.4+Math.min(speed/180,.9):name==='Walk'?Math.min(3.2,.9+speed*.62):1;
+  current.timeScale=name==='Flight'?5.5+Math.min(speed/120,1):name==='Walk'?Math.min(3.2,.9+speed*.62):1;
+  bird.userData.flapFrequency=name==='Flight'?current.timeScale:0;
   if(name==='Peck'){if(!pecking)current.reset();current.time=(1-peck)*current.getClip().duration;current.paused=true;}else current.paused=false;
   pecking=name==='Peck';mixer.update(dt);
   if(name==='Walk'){

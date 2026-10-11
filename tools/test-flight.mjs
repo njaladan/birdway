@@ -59,17 +59,24 @@ assert.equal(gaitBird.userData.animationName,'Walk');assert.ok(gaitBird.userData
 assert.ok(model.position.y>firstBob,'walking gait visibly bobs the body without moving the player origin');assert.ok(leftLeg.quaternion.angleTo(firstLeg)>.03,'walking gait moves the legs');
 assert.ok(leftLeg.quaternion.angleTo(rightLeg.quaternion)>.05,'walking legs alternate instead of stepping in sync');
 assert.ok(leftKnee.quaternion.angleTo(rightKnee.quaternion)>.05,'walking knees bend on alternating footfalls');
-const wingSpan=()=>{
- model.updateMatrixWorld(true);
- return Math.abs(model.getObjectByName('left-wing-2').getWorldPosition(new THREE.Vector3()).x-model.getObjectByName('right-wing-2').getWorldPosition(new THREE.Vector3()).x);
+const skinBounds=()=>{
+ model.updateMatrixWorld(true);const bounds=new THREE.Box3(),point=new THREE.Vector3();
+ model.traverse(object=>{if(object.isSkinnedMesh){for(let i=0;i<object.geometry.attributes.position.count;i++){object.getVertexPosition(i,point);bounds.expandByPoint(object.localToWorld(point));}}});
+ return bounds.getSize(new THREE.Vector3());
 };
-gaitBird.userData.animate(.3,false,0,0);const foldedSpan=wingSpan(),tail=model.getObjectByName('tail-bone-1'),foldedTail=tail.scale.x;
-gaitBird.userData.animate(.5,true,35,0,{flapStrength:0,glide:true});const glideSpan=wingSpan(),glideTail=tail.scale.x;
+const tail=model.getObjectByName('tail-bone-1');
+for(let t=.3;t<.52;t+=1/60)gaitBird.userData.animate(t,false,0,0);
+const foldedBounds=skinBounds(),foldedTail=tail.scale.x;
+assert.ok(foldedBounds.x<.16,`grounded skinned silhouette tucks inside 16 cm (${foldedBounds.x.toFixed(3)} m wide)`);
+for(let t=.52;t<.76;t+=1/60)gaitBird.userData.animate(t,true,35,0,{flapStrength:0,glide:true});
+const glideBounds=skinBounds(),glideTail=tail.scale.x;
 assert.equal(gaitBird.userData.animationName,'Glide');assert.equal(gaitBird.userData.flightPose,'glide');
-assert.ok(glideSpan>foldedSpan*1.35,'gliding wings extend beyond the folded walking pose');
+assert.ok(glideBounds.x>foldedBounds.x*1.35,'gliding wings extend beyond the folded walking pose');
+assert.ok(glideBounds.x>.32,'glide restores the full outer-wing reach');
 assert.ok(glideTail>foldedTail*1.3,'resting tail feathers tuck closer than the gliding tail');
 gaitBird.userData.animate(.8,true,35,0,{flapStrength:1,glide:false});
 assert.equal(gaitBird.userData.animationName,'Flight');assert.equal(gaitBird.userData.flightPose,'flap','Space-style input selects the flap cycle');
+assert.ok(gaitBird.userData.flapFrequency>=5.5&&gaitBird.userData.flapFrequency<6,'pigeon wingbeats run at a quick 5–6 cycles per second');
 const flightTail=tail.scale.x;
 gaitBird.userData.animate(1.1,true,8,0,{flapStrength:0,glide:true,landing:true});
 assert.equal(gaitBird.userData.animationName,'Flare');assert.equal(gaitBird.userData.flightPose,'flare');
